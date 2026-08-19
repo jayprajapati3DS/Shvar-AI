@@ -46,15 +46,15 @@ enum AiRequestType: string
     /**
      * The types the application can actually produce today.
      *
-     * General arrived in Phase 2 (the AI Playground); ProductRecommendation in
-     * Phase 3. The rest are declared so the schema and the UI already account
-     * for them, but nothing generates them yet.
+     * General arrived in Phase 2 (the AI Playground), ProductRecommendation in
+     * Phase 3, EmailGeneration in Phase 4. FollowUpGeneration is declared so the
+     * schema and the UI already account for it, but nothing generates it yet.
      *
      * @return list<self>
      */
     public static function implementedCases(): array
     {
-        return [self::General, self::ProductRecommendation];
+        return [self::General, self::ProductRecommendation, self::EmailGeneration];
     }
 
     public function isImplemented(): bool

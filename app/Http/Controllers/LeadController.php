@@ -8,19 +8,25 @@ use App\Enums\ActivityType;
 use App\Enums\LeadSource;
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
+use App\Enums\RecommendationStatus;
 use App\Http\Requests\BulkLeadActionRequest;
 use App\Http\Requests\StoreLeadRequest;
 use App\Http\Resources\ContactResource;
+use App\Http\Resources\EmailDraftResource;
+use App\Http\Resources\EmailGenerationResource;
 use App\Http\Resources\LeadAnalysisResource;
 use App\Http\Resources\LeadResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Activity;
 use App\Models\Company;
 use App\Models\Contact;
+use App\Models\EmailDraft;
+use App\Models\EmailGeneration;
 use App\Models\Lead;
 use App\Models\Product;
 use App\Services\AI\AIServiceInterface;
 use App\Services\BulkEditor;
+use App\Services\Email\EmailContextBuilder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,6 +38,10 @@ class LeadController extends Controller
         // Only used to tell the lead page whether AI is available, so the
         // Analyze button can explain itself when it is not.
         private readonly AIServiceInterface $ai,
+
+        // Phase 4: computes which fields are still blank, for the
+        // "additional information may improve personalization" nudge.
+        private readonly EmailContextBuilder $emailContext,
     ) {}
 
     public function index(Request $request): Response
@@ -110,6 +120,9 @@ class LeadController extends Controller
                 )
                 : null,
             'aiStatus' => $this->ai->status()->toArray(),
+
+            // PHASE 4: email outreach.
+            'email' => $this->emailPanel($lead),
         ]);
     }
 
@@ -200,6 +213,80 @@ class LeadController extends Controller
         $deleted = $editor->delete(Lead::class, $request->ids());
 
         return back()->with('success', "Deleted {$deleted} lead(s).");
+    }
+
+    /**
+     * Everything the Email Outreach panel on the lead page needs.
+     *
+     * The blockers are computed here rather than inferred in the UI, so the
+     * button explains itself instead of failing on click - and so there is one
+     * definition of "can this lead be written to", shared with the controller
+     * that actually enforces it.
+     *
+     * @return array<string, mixed>
+     */
+    private function emailPanel(Lead $lead): array
+    {
+        $lead->loadMissing(['company', 'contact']);
+
+        $drafts = EmailDraft::query()
+            ->where('lead_id', $lead->id)
+            ->with('product:id,name')
+            ->latestFirst()
+            ->limit(30)
+            ->get();
+
+        $generations = EmailGeneration::query()
+            ->where('lead_id', $lead->id)
+            ->latestFirst()
+            ->limit(10)
+            ->get();
+
+        // Only ACCEPTED recommendations. Section 5: the email follows the sales
+        // direction the user approved, not an unreviewed suggestion.
+        $accepted = $lead->productMatches()
+            ->where('status', RecommendationStatus::Accepted->value)
+            ->whereHas('product', fn ($q) => $q->where('active', true))
+            ->with('product:id,name')
+            ->get();
+
+        $blockers = [];
+
+        if ($lead->contact === null) {
+            $blockers[] = 'This lead has no contact. Add the person you want to write to.';
+        } elseif (blank($lead->contact->email)) {
+            $blockers[] = 'That contact has no email address.';
+        }
+
+        if ($lead->company === null) {
+            $blockers[] = 'This lead has no company.';
+        }
+
+        if ($accepted->isEmpty()) {
+            $blockers[] = 'No accepted product recommendation yet. Run an analysis and accept one, '
+                .'or attach a product by hand and accept it.';
+        }
+
+        // The soft nudge, only meaningful once generation is actually possible.
+        $thin = $blockers === [] && $accepted->isNotEmpty()
+            ? $this->emailContext->gaps($lead, $accepted->first())
+            : [];
+
+        return [
+            'drafts' => EmailDraftResource::collection($drafts)->resolve(),
+            'generations' => EmailGenerationResource::collection($generations)->resolve(),
+            'acceptedProducts' => $accepted
+                ->map(fn (\App\Models\LeadProductMatch $m) => [
+                    'id' => $m->id,
+                    'product' => $m->product?->name ?? 'Unknown product',
+                    'sales_angle' => $m->sales_angle,
+                ])
+                ->values()
+                ->all(),
+            'canGenerate' => $blockers === [],
+            'blockers' => $blockers,
+            'thin' => $thin,
+        ];
     }
 
     /**

@@ -84,6 +84,11 @@ export const routes = {
             `/leads/${id}/recommendations/${matchId}/reject`,
         archiveRecommendation: (id: number, matchId: number) =>
             `/leads/${id}/recommendations/${matchId}/archive`,
+
+        // Phase 4 - email generation. Produces drafts only; nothing is sent.
+        generateEmail: (id: number) => `/leads/${id}/emails`,
+        resolveGeneration: (id: number, generationId: number, choice: 'previous' | 'new') =>
+            `/leads/${id}/emails/${generationId}/resolve/${choice}`,
     },
 
     products: {
@@ -112,7 +117,19 @@ export const routes = {
         template: () => '/import/template',
     },
 
-    emailDrafts: () => '/email-drafts',
+    emailDrafts: {
+        index: (q?: Query) => withQuery('/email-drafts', q),
+        show: (id: number) => `/email-drafts/${id}`,
+        update: (id: number) => `/email-drafts/${id}`,
+        destroy: (id: number) => `/email-drafts/${id}`,
+
+        // The approval gate. Only `approve` makes a draft sendable.
+        approve: (id: number) => `/email-drafts/${id}/approve`,
+        reject: (id: number) => `/email-drafts/${id}/reject`,
+        archive: (id: number) => `/email-drafts/${id}/archive`,
+        send: (id: number) => `/email-drafts/${id}/send`,
+    },
+
     followUps: () => '/follow-ups',
     knowledgeBase: () => '/knowledge-base',
 
@@ -132,6 +149,12 @@ export const routes = {
             logs: (q?: Query) => withQuery('/settings/ai/logs', q),
             log: (id: number) => `/settings/ai/logs/${id}`,
             clearLogs: () => '/settings/ai/logs',
+        },
+
+        email: {
+            index: () => '/settings/email',
+            update: () => '/settings/email',
+            resetSignature: () => '/settings/email/signature',
         },
     },
 } as const;

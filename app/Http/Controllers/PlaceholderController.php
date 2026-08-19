@@ -10,27 +10,16 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Phase 1 stubs for the modules that depend on the email/RAG layer.
+ * Stubs for the modules still waiting on a later phase.
  *
- * Settings graduated to a real module in Phase 2 (App\Http\Controllers\Settings),
- * so only three stubs remain here.
+ * Settings graduated to a real module in Phase 2, and Email Drafts in Phase 4,
+ * so two stubs remain here.
  *
  * Each renders a page describing what the module will do and what it is waiting
- * on, so the navigation is complete and nothing looks broken. None of them calls
- * the AI layer - that arrives with the Phase 3 features.
+ * on, so the navigation is complete and nothing looks broken.
  */
 class PlaceholderController extends Controller
 {
-    public function emailDrafts(): Response
-    {
-        return Inertia::render('Placeholders/EmailDrafts', [
-            'context' => [
-                // Real counts, so the page shows what the module will operate on.
-                'leadsAwaitingOutreach' => Lead::whereIn('lead_status', ['Qualified', 'Approved'])->count(),
-            ],
-        ]);
-    }
-
     public function followUps(): Response
     {
         return Inertia::render('Placeholders/FollowUps', [

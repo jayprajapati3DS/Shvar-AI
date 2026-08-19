@@ -6,6 +6,7 @@ import LeadIntelligencePanel from '@/Components/Ai/LeadIntelligencePanel.vue';
 import Badge from '@/Components/Badge.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import DetailList from '@/Components/DetailList.vue';
+import EmailOutreachPanel from '@/Components/Email/EmailOutreachPanel.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FormField from '@/Components/FormField.vue';
 import LeadFormModal from '@/Components/Forms/LeadFormModal.vue';
@@ -13,10 +14,10 @@ import Modal from '@/Components/Modal.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import { routes } from '@/routes';
 import type { AiStatus, LeadAnalysis } from '@/types/ai';
-import type { Contact, Lead, Product, SelectOption } from '@/types/models';
+import type { Contact, EmailDraft, EmailGeneration, Lead, Product, SelectOption } from '@/types/models';
 import type { DetailItem } from '@/types/ui';
 
-const { lead, options, availableProducts, activityTypes, analyses, latestAnalysis, aiStatus } =
+const { lead, options, availableProducts, activityTypes, analyses, latestAnalysis, aiStatus, email } =
     defineProps<{
         lead: { data: Lead };
         options: {
@@ -33,6 +34,16 @@ const { lead, options, availableProducts, activityTypes, analyses, latestAnalysi
         analyses: { data: LeadAnalysis[] };
         latestAnalysis: { data: LeadAnalysis } | null;
         aiStatus: AiStatus;
+
+        // Phase 4 - email outreach.
+        email: {
+            drafts: EmailDraft[];
+            generations: EmailGeneration[];
+            acceptedProducts: { id: number; product: string; sales_angle: string | null }[];
+            canGenerate: boolean;
+            blockers: string[];
+            thin: string[];
+        };
     }>();
 
 const showForm = ref(false);
@@ -182,6 +193,18 @@ function destroy() {
                 :analysis="latestAnalysis"
                 :history="analyses"
                 :status="aiStatus"
+            />
+
+            <!-- Email outreach (Phase 4) -->
+            <EmailOutreachPanel
+                :lead-id="lead.data.id"
+                :drafts="email.drafts"
+                :generations="email.generations"
+                :accepted-products="email.acceptedProducts"
+                :status="aiStatus"
+                :can-generate="email.canGenerate"
+                :blockers="email.blockers"
+                :thin="email.thin"
             />
 
             <!-- Product opportunities: manual picks plus accepted AI ones -->

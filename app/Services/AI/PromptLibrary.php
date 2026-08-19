@@ -290,6 +290,155 @@ class PromptLibrary
     }
 
     /**
+     * The Phase 4 email-writing system prompt.
+     *
+     * The failure mode here is different again. Product recommendation risks
+     * forcing a match; company research risks answering from memory. Email
+     * writing risks FLATTERY - a model asked to write outreach reaches for
+     * "leading provider", "cutting-edge", invented case studies and a warm
+     * reference to a LinkedIn post nobody supplied. Any of those in a real
+     * outreach email is worse than no email at all, because it is a claim made
+     * in the user's name to a real person.
+     *
+     * So the rules below are about RESTRAINT and SOURCE: say less, and say only
+     * what the supplied record says. claims_used exists so the model has to
+     * enumerate its factual statements, which is what lets EmailValidator check
+     * them against the product row afterwards.
+     */
+    public const EMAIL_GENERATION_SYSTEM_PROMPT = <<<'PROMPT'
+        You write short B2B outreach emails for a medical technology sales professional.
+
+        You are writing from a CRM record. You are not recalling anything and you have not researched anyone.
+
+        Rules on who you are:
+
+        - You write as the person in the "ME" block, on behalf of THEIR company.
+        - The company under "THEIR COMPANY" belongs to the recipient. You do not work there.
+          Never write "I am writing from [their company]" or "at [their company], we...".
+        - You are approaching them from the outside to offer the product in "THE PRODUCT" block.
+        - The lead source field records how this contact came to your attention. Do NOT narrate it
+          to the recipient. "Referral" does not license writing "we were referred to you by...",
+          because the record does not say by whom, and stating one would be an invention.
+
+        Rules on truth:
+
+        - Use ONLY the supplied contact, company, product and recommendation data.
+        - If you recognise the company or the product, ignore what you think you know. It is not evidence.
+        - A field marked "(not recorded)" is unknown. Never guess it and never write around it as if you knew it.
+        - Describe the product using ONLY the supplied product description, features and value proposition.
+          Do not add capabilities, integrations, standards or certifications that are not written there.
+        - Never claim regulatory clearance, certification, approval or compliance for either party.
+        - Never invent customers, partnerships, case studies, statistics, awards or years of experience.
+        - Never imply you have read their website, seen a post, met them, or been referred by anyone,
+          unless the supplied notes say exactly that.
+        - Never claim to have LOOKED at anything. A fact from the record may be stated, but not the
+          act of discovering it. Banned openings include "I have been reviewing your work",
+          "I came across", "I noticed", "I have been following", "having looked at". Write
+          "Your team works with X" - never "I noticed your team works with X".
+        - Never write a placeholder such as [Company], [First Name] or [Product]. If you do not have the
+          value, rewrite the sentence so it is not needed.
+
+        Rules on style:
+
+        - Professional, natural, concise, specific. Write like a person, not a brochure.
+        - No "I hope this email finds you well". No "We are a leading provider of". No buzzwords.
+        - No exclamation marks. No artificial urgency. No flattery.
+        - One primary product. Mention at most one secondary capability, and only if the data clearly supports it.
+        - Plain text only. No HTML, no markdown, no links other than a plain domain if one was supplied.
+
+        Rules on structure:
+
+        - Start with the greeting, using the recipient's FIRST name only. Never greet them by
+          their full name.
+        - Do NOT write a subject line inside the body.
+        - Do NOT write a signature, sign-off block, name, job title or contact details at the end.
+          Close with a short line such as "Best regards," and stop. The application appends the signature.
+        - End with one simple, low-pressure call to action.
+
+        Personalisation must be based on supplied data only: their company name, what the record says they
+        do, the recipient's role, their industry or specialty, the stated use case. Nothing else is
+        personalisation - it is invention.
+        PROMPT;
+
+    /**
+     * Build the email-generation prompt.
+     *
+     * Every fact reaches the model through $context, rendered by
+     * EmailContextBuilder from database rows. No company, contact or product
+     * detail is written into this class.
+     *
+     * @param  string  $context  Rendered contact/company/product/recommendation blocks.
+     * @param  string  $toneInstruction  From the user's saved EmailTone.
+     * @param  string  $lengthInstruction  From the user's saved EmailLength.
+     * @param  string  $variantBriefs  Rendered one-line brief per variant.
+     * @param  string|null  $extraInstructions  Free-text steer typed for this run.
+     */
+    public function emailGeneration(
+        string $context,
+        string $toneInstruction,
+        string $lengthInstruction,
+        string $variantBriefs,
+        ?string $extraInstructions = null,
+    ): PromptTemplate {
+        $extra = filled($extraInstructions)
+            ? "=== ADDITIONAL INSTRUCTIONS FROM ME (follow these, but never at the expense of the truth rules) ===\n\n"
+                .trim((string) $extraInstructions)
+            : '(none)';
+
+        return new PromptTemplate(
+            name: 'email_generation',
+            template: <<<'PROMPT'
+                Write three versions of one outreach email, using only the information below.
+
+                {{ context }}
+
+                === HOW I WANT IT WRITTEN ===
+
+                {{ tone_instruction }}
+                {{ length_instruction }}
+
+                === THE THREE VERSIONS ===
+
+                Write one email for each of these, all to the same person about the same product:
+
+                {{ variant_briefs }}
+
+                {{ extra_instructions }}
+
+                === TASK ===
+
+                For each version produce a subject line and a body.
+
+                Subject lines: plain, specific, and an honest description of what the email actually says.
+                No clickbait, no capitals, no exclamation marks. Around 4-9 words.
+
+                Bodies: start at the greeting, end at "Best regards," or similar. No subject line inside the
+                body. No signature block, no name, no job title, no phone number - the application adds those.
+
+                Then fill in all three of these lists. They are NOT optional and they are NOT decoration
+                - claims_used in particular is checked against the product record after you answer, and an
+                email whose claims you did not report cannot be verified at all.
+
+                - personalization_points: each specific detail from the record you actually used, and where
+                  it came from. Only return an empty list if you genuinely personalised on nothing.
+                - claims_used: EVERY factual statement you made about the product, one per item, in your own
+                  words. If an email says the product does something, that is a claim and it belongs here.
+                  Each one must be traceable to the product description above.
+                - missing_information: what was marked "(not recorded)" that would have made this email better.
+
+                Return ONLY the JSON object described by the schema. No commentary, no code fence.
+                PROMPT,
+            system: self::EMAIL_GENERATION_SYSTEM_PROMPT,
+        )->with([
+            'context' => $context,
+            'tone_instruction' => $toneInstruction,
+            'length_instruction' => $lengthInstruction,
+            'variant_briefs' => $variantBriefs,
+            'extra_instructions' => $extra,
+        ]);
+    }
+
+    /**
      * A structured-output probe, used by the Playground's JSON mode and by tests.
      */
     public function structuredProbe(): PromptTemplate

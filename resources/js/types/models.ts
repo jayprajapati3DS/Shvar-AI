@@ -243,3 +243,128 @@ export interface SharedProps {
     };
     [key: string]: unknown;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Phase 4 - AI personalized sales email                                       */
+/* -------------------------------------------------------------------------- */
+
+/** One rule-based check from the pre-approval panel. */
+export interface QualityCheck {
+    key: string;
+    label: string;
+    /** `fail` blocks approval; `warn` never does. */
+    status: 'pass' | 'warn' | 'fail';
+    detail: string | null;
+}
+
+export interface QualityResult {
+    passed: boolean;
+    /** True when at least one check failed - approval is refused. */
+    blocking: boolean;
+    word_count: number;
+    checks: QualityCheck[];
+}
+
+/** One email the user could send: a single variant of a single generation. */
+export interface EmailDraft {
+    id: number;
+    email_generation_id: number | null;
+    lead_id: number;
+
+    variant: string;
+    variant_label: string;
+    variant_short_label: string;
+    variant_color: BadgeColor;
+
+    status: string;
+    status_label: string;
+    status_color: BadgeColor;
+
+    subject: string;
+    body: string;
+
+    /** What the model wrote, before any edit. Never updated. */
+    ai_subject: string | null;
+    ai_body: string | null;
+    was_edited: boolean;
+
+    recipient_email: string | null;
+    recipient_name: string | null;
+
+    personalization_points: string[];
+    quality: QualityResult | null;
+    word_count: number | null;
+
+    ai_model: string | null;
+    ai_request_id: number | null;
+    created_by: string | null;
+    version: number;
+
+    approved_at: string | null;
+    sent_at: string | null;
+    delivery_mode: string | null;
+    delivery_error: string | null;
+
+    /** Resolved server-side so the UI never reimplements "can this be sent". */
+    is_editable: boolean;
+    is_approvable: boolean;
+    is_sendable: boolean;
+
+    created_at: string | null;
+    updated_at: string | null;
+
+    product?: { id: number; name: string; category: string | null } | null;
+    contact?: { id: number; name: string; email: string | null; job_title: string | null } | null;
+    lead?: {
+        id: number;
+        status: string;
+        company: { id: number; name: string } | null;
+    };
+    versions?: EmailDraftVersion[];
+}
+
+export interface EmailDraftVersion {
+    version: number;
+    subject: string;
+    body: string;
+    source: 'ai' | 'user';
+    word_count: number | null;
+    created_at: string | null;
+}
+
+/** One AI generation run: the three variants plus the model's own accounting. */
+export interface EmailGeneration {
+    id: number;
+    model: string;
+    tone: string;
+    length: string;
+    extra_instructions: string | null;
+    personalization_points: string[];
+    claims_used: string[];
+    missing_information: string[];
+    /** What the validator removed or doubted. */
+    warnings: string[];
+    /** Set when this run replaced an earlier one via Regenerate. */
+    regenerated_from_id: number | null;
+    created_at: string | null;
+}
+
+/** What the recipient would actually see - nothing internal. */
+export interface EmailPreview {
+    from: string | null;
+    from_name: string | null;
+    to: string | null;
+    to_name: string | null;
+    subject: string;
+    body: string;
+    signature: string;
+    body_without_signature: string;
+}
+
+/** How this build delivers. Always simulated in Phase 4. */
+export interface SendingMode {
+    simulated: boolean;
+    mode: string;
+    description: string;
+    allowed: boolean;
+}

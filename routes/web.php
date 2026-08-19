@@ -7,6 +7,8 @@ use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyResearchController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmailDraftController;
+use App\Http\Controllers\EmailGenerationController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\LeadAnalysisController;
 use App\Http\Controllers\LeadController;
@@ -16,6 +18,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\Settings\AiLogController;
 use App\Http\Controllers\Settings\AiPlaygroundController;
 use App\Http\Controllers\Settings\AiSettingsController;
+use App\Http\Controllers\Settings\EmailSettingsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -100,6 +103,38 @@ Route::post('leads/{lead}/recommendations/{match}/reject', [LeadAnalysisControll
 Route::post('leads/{lead}/recommendations/{match}/archive', [LeadAnalysisController::class, 'archive'])
     ->name('leads.recommendations.archive');
 
+// ---- Phase 4: AI personalized sales email ---------------------------------
+//
+// NOTHING here sends an email to anyone. Generation produces drafts only;
+// approval is a separate, explicit human action; and the only bound
+// EmailServiceInterface is LocalTestEmailService, which writes to the local log.
+//
+// Generation is additive in exactly the same way as Phase 3 analysis: a new run
+// inserts a new email_generations row and a fresh set of drafts, so regenerating
+// builds history rather than overwriting what you already reviewed.
+
+Route::post('leads/{lead}/emails', [EmailGenerationController::class, 'store'])
+    ->name('leads.emails.generate');
+Route::post('leads/{lead}/emails/{generation}/resolve/{choice}', [EmailGenerationController::class, 'resolve'])
+    ->whereIn('choice', ['previous', 'new'])
+    ->name('leads.emails.resolve');
+
+Route::get('email-drafts', [EmailDraftController::class, 'index'])->name('email-drafts.index');
+Route::get('email-drafts/{draft}', [EmailDraftController::class, 'show'])->name('email-drafts.show');
+Route::put('email-drafts/{draft}', [EmailDraftController::class, 'update'])->name('email-drafts.update');
+Route::delete('email-drafts/{draft}', [EmailDraftController::class, 'destroy'])->name('email-drafts.destroy');
+
+// The approval gate. `approve` is the only route that can make a draft
+// sendable, and `send` refuses anything that has not been through it.
+Route::post('email-drafts/{draft}/approve', [EmailDraftController::class, 'approve'])
+    ->name('email-drafts.approve');
+Route::post('email-drafts/{draft}/reject', [EmailDraftController::class, 'reject'])
+    ->name('email-drafts.reject');
+Route::post('email-drafts/{draft}/archive', [EmailDraftController::class, 'archive'])
+    ->name('email-drafts.archive');
+Route::post('email-drafts/{draft}/send', [EmailDraftController::class, 'send'])
+    ->name('email-drafts.send');
+
 // Activity timeline, shared by leads / companies / contacts.
 Route::post('{subjectType}/{subjectId}/activities', [ActivityController::class, 'store'])
     ->whereIn('subjectType', ['leads', 'companies', 'contacts'])
@@ -138,6 +173,12 @@ Route::prefix('settings')->name('settings.')->group(function (): void {
     Route::get('ai/playground', [AiPlaygroundController::class, 'index'])->name('ai.playground');
     Route::post('ai/playground', [AiPlaygroundController::class, 'run'])->name('ai.playground.run');
 
+    // Sender profile, signature and writing preferences (Phase 4).
+    Route::get('email', [EmailSettingsController::class, 'index'])->name('email.index');
+    Route::put('email', [EmailSettingsController::class, 'update'])->name('email.update');
+    Route::delete('email/signature', [EmailSettingsController::class, 'resetSignature'])
+        ->name('email.signature.reset');
+
     // Local request log
     Route::get('ai/logs', [AiLogController::class, 'index'])->name('ai.logs');
     Route::get('ai/logs/{aiRequest}', [AiLogController::class, 'show'])->name('ai.logs.show');
@@ -145,8 +186,9 @@ Route::prefix('settings')->name('settings.')->group(function (): void {
     Route::delete('ai/logs', [AiLogController::class, 'clear'])->name('ai.logs.clear');
 });
 
-// ---- Phase 1 placeholders (still awaiting Phase 3) -----------------------
+// ---- Remaining placeholders ----------------------------------------------
+//
+// Email Drafts graduated to a real module in Phase 4, so only two stubs remain.
 
-Route::get('email-drafts', [PlaceholderController::class, 'emailDrafts'])->name('email-drafts.index');
 Route::get('follow-ups', [PlaceholderController::class, 'followUps'])->name('follow-ups.index');
 Route::get('knowledge-base', [PlaceholderController::class, 'knowledgeBase'])->name('knowledge-base.index');

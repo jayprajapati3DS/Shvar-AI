@@ -3,7 +3,7 @@ const { title, message, icon = 'inbox' } = defineProps<{
     title: string;
     message?: string;
     /** Which glyph to draw. Keep the set small and literal. */
-    icon?: 'inbox' | 'building' | 'user' | 'box' | 'search' | 'clock';
+    icon?: 'inbox' | 'building' | 'user' | 'box' | 'search' | 'clock' | 'mail';
 }>();
 
 const paths: Record<string, string> = {
@@ -13,6 +13,7 @@ const paths: Record<string, string> = {
     box: 'M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9',
     search: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
     clock: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+    mail: 'M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75',
 };
 </script>
 

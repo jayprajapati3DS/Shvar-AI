@@ -23,7 +23,12 @@ information, matches it against your product portfolio, and returns recommendati
 evidence and a sales angle — for you to review. See
 **[docs/PRODUCT_INTELLIGENCE.md](docs/PRODUCT_INTELLIGENCE.md)**.
 
-Email generation and follow-up drafting are **Phase 4 and not yet built**.
+Phase 4 added email outreach: from an accepted recommendation, the local model writes three
+personalised drafts for you to edit and approve. **Nothing is ever sent without your approval,
+and this phase cannot send at all** — the only email service simulates delivery to the local log.
+See **[docs/EMAIL_GENERATION.md](docs/EMAIL_GENERATION.md)**.
+
+Follow-up drafting is a later phase and not yet built.
 
 Phase 2 added a local AI layer: inference runs on your machine through
 [Ollama](https://ollama.com). See **[docs/LOCAL_AI.md](docs/LOCAL_AI.md)** for the data-flow and
@@ -34,16 +39,17 @@ privacy detail, and section 9 below for setup.
 | Not present | Why |
 | --- | --- |
 | OpenAI, Anthropic, Gemini, Azure, any cloud AI | Never — see Privacy |
-| AI email generation | Phase 4 |
-| Follow-up generation | Phase 4 |
-| Email sending, Gmail/Outlook | Phase 4 |
-| RAG / embeddings / vector database | Phase 4 |
-| Web scraping / lead enrichment | Phase 4 |
-| Autonomous agents | Phase 4 |
+| Real email sending (SMTP, Gmail, Outlook) | Later phase — Phase 4 simulates only |
+| Follow-up generation | Later phase |
+| Email scheduling / automatic follow-ups | Later phase |
+| RAG / embeddings / vector database | Later phase |
+| Web scraping / lead enrichment for outreach | Later phase |
+| Autonomous agents | Later phase |
 | User accounts / login | Single-user local app |
 
-The AI request types produced today are `general` (the Playground) and `product_recommendation`
-(Analyze Lead). Nothing generates the email or follow-up types.
+The AI request types produced today are `general` (the Playground), `product_recommendation`
+(Analyze Lead) and `email_generation` (Generate personalized email). Nothing generates the
+follow-up type.
 
 Three tests enforce the boundary: one fails the build if a cloud AI hostname appears anywhere in
 `app/`, `resources/js/`, `routes/` or `config/`; one records every HTTP request the AI pages make and
@@ -198,6 +204,9 @@ php artisan db:seed
 
 # Optional: demo companies, contacts and leads to click around in
 php artisan db:seed --class=SampleDataSeeder
+
+# Optional: accept one recommendation per demo lead, so emails can be generated
+php artisan db:seed --class=EmailScenarioSeeder
 ```
 
 `DatabaseSeeder` loads **only the product portfolio** — companies, contacts and leads are your
@@ -207,6 +216,11 @@ duplicates.
 
 `SampleDataSeeder` is opt-in and invents seven companies using `.example` domains (reserved by
 RFC 2606, so they can never resolve). Remove it all with `php artisan migrate:fresh --seed`.
+
+`EmailScenarioSeeder` accepts one sensible product recommendation on each demo lead — the step you
+would otherwise do by hand — so **Generate personalized email** is immediately clickable. It creates
+no drafts on purpose: hand-written text stored as though a model produced it is exactly what this
+application exists to avoid. For real drafts, run `php artisan email:scenarios` with Ollama up.
 
 ### CSV import
 
@@ -545,20 +559,53 @@ case-sensitive in PostgreSQL, where it should become `ilike`.
 - **`RecommendationValidator`** — drops invented product ids, recovers right-name/wrong-id, rejects
   invalid modules, coerces malformed confidence, and surfaces what it filtered
 
+**Phase 4 — AI personalized sales email**
+
+- **Email Outreach on the lead page** — **Generate personalized email** writes three variants
+  (direct, consultative, executive-short) from an *accepted* Phase 3 recommendation. When it cannot
+  run, the panel says which of contact / email address / company / accepted recommendation is missing,
+  so the button explains itself instead of failing on click
+- **Nothing is sent, ever** — generation produces drafts; `Approved` is the only sendable status;
+  and the only implementation of `EmailServiceInterface` simulates, writing the message to the local
+  log. The approval check exists in three places (controller, editor, transport) because a gap in one
+  must not be a gap in the system
+- **The signature is never AI-written** — the validator strips any sign-off block the model
+  produced and the application appends yours. A model asked to sign off invents a job title and a
+  phone number, and a wrong phone number in outreach sent in your name is a real problem
+- **Claims are checkable** — the model must enumerate every factual statement it made about the
+  product in `claims_used`; each is compared against the product record and anything largely absent
+  from it is flagged for review
+- **Placeholders block approval** — `Hi [First Name],` is dropped at generation and refused at
+  approval. Minor issues (no greeting, slightly long, no signature configured) warn without blocking
+- **Version history** — the model's original wording is written once and never updated; every save
+  appends a version; regenerating adds a new run alongside the old one with **Keep previous** /
+  **Use new version**. Nothing is overwritten or deleted
+- **Preview shows only what the recipient would see** — no confidence score, reasoning, model name
+  or internal notes. A test asserts those keys are absent from the payload sent to the browser
+- **Settings → Email** — sender profile, composed or hand-written signature, tone
+  (Professional / Consultative / Technical / Executive / Friendly) and length (Short / Standard /
+  Detailed). No mail host, port or credential exists to configure, because nothing can send
+- **Email Drafts page** — list, filter by status / variant / product / company, search, open the
+  editor with quality panel, preview, version history and approval
+
+See [docs/EMAIL_GENERATION.md](docs/EMAIL_GENERATION.md) for the full workflow, prompt architecture
+and threat model.
+
 **Placeholders** (navigation present, scope stated on the page, no AI behind them)
 
-- Email Drafts · Follow-ups · Knowledge Base
+- Follow-ups · Knowledge Base
 
-**Still declared but NOT implemented** (Phase 4)
+**Still declared but NOT implemented**
 
-- `AiRequestType::EmailGeneration` / `FollowUpGeneration` — declared, marked "Phase 4" in the UI,
-  never generated. A test asserts this
-- No email drafting, sending, mailbox integration, scraping or RAG exists anywhere in the codebase
+- `AiRequestType::FollowUpGeneration` — declared, marked unbuilt in the UI, never generated.
+  A test asserts this
+- No real email sending, mailbox integration, OAuth, scheduling, scraping or RAG exists anywhere in
+  the codebase. `EmailPrivacyTest` asserts this against the source tree, not just against behaviour
 
 ### Test results
 
 ```
-php artisan test        →  237 passed, 1893 assertions
+php artisan test        →  410 passed, 4492 assertions
 npm run type-check      →  clean
 npm run build           →  clean
 ```
@@ -580,6 +627,12 @@ npm run build           →  clean
 | `LeadTest` | CRUD, filters, status-change timeline entries, manual product matching, cross-lead guards |
 | `ProductTest` | seeder correctness + idempotence, filters, list-field splitting, cascade |
 | `CsvImportTest` | header matching, defaults, invalid rows, duplicates, BOM, blank lines, template |
+| `BulkActionsTest` | bulk edit whitelist, blank-is-not-clear, explicit clear, required fields unclearable, per-record timeline entries, bulk delete cascades |
+| `Email/EmailGenerationTest` | three variants, everything starts as Draft, recipient snapshotting, prompt contents, schema forwarding, dropped placeholders and self-written signatures, stripped HTML, unsupported-claim flagging, regeneration history, and every failure mode |
+| `Email/EmailApprovalTest` | editing appends versions and never overwrites the AI original, approval sets the timestamp and logs an activity, editing revokes approval, unapproved drafts refuse to send at all three layers, simulated send writes only to the local log |
+| `Email/EmailSignatureAndQualityTest` | composed vs hand-written signature, blank-field handling, the signature being appended rather than stored, every quality check and its severity, settings whitelist and validation |
+| `Email/EmailPagesTest` | drafts list and filters, editor payload, version history, the preview carrying nothing internal, the lead page explaining why generation is blocked, no mail server exposed in settings |
+| `Email/EmailPrivacyTest` | no cloud AI hostname in source, only one `EmailServiceInterface` implementation, unimplemented drivers throw, Laravel Mail unused, no outbound call anywhere in the email layer, no OAuth or scheduling route |
 
 Ollama does **not** need to be running for the suite to pass — every Ollama response is faked.
 
@@ -630,72 +683,91 @@ Phase 2 specifically:
     the timeout fires. No queue worker is involved.
 16. **The AI log grows unbounded.** Stored prompt/response text is capped per row, but the row count
     is not. Clear it from Settings → AI Logs when you want to.
-17. **Only `general` requests exist.** Nothing in the CRM calls the AI yet — no lead, company or
-    product data is sent to the model anywhere in Phase 2. That begins in Phase 3.
-18. **The system prompt is a base, not a finished sales prompt.** It is deliberately generic and
-    defensive; the specialised prompts belong to Phase 3.
+17. **The base system prompt is not the one that matters most.** Each AI feature has its own
+    specialised system prompt — product recommendation, company research, email generation — because
+    each has a different failure mode. Editing the base prompt in Settings does not change those.
+18. **Generation is slow on CPU.** An email takes one to two minutes on this machine, an analysis
+    four to five. It runs inside the browser request, so the page waits. Getting the GPU working
+    (see [docs/LOCAL_AI.md](docs/LOCAL_AI.md)) or moving generation to a queue worker are the two
+    ways out.
+19. **Unsupported-claim detection is a heuristic, not a proof.** It compares word overlap against the
+    product record and is deliberately generous, so a fabricated claim phrased in the record's own
+    vocabulary can slip past it. Read `claims_used` on the draft page before approving.
+20. **Simulated sending writes the full email body to the local application log.** That is the point
+    — it is how you check what would have gone — but the log is plain text on disk like every other
+    log here.
 
 ---
 
-## 12. Phase 4 planned
+## 12. Phase 5 planned
 
 Not started. Nothing below exists in this codebase.
 
-Phase 2 built the AI plumbing; Phase 3 pointed it at the product catalogue. Phase 4 is where the AI
-starts producing customer-facing artefacts — which raises the stakes, because a draft email that
-asserts something untrue can leave the building.
+Phase 2 built the AI plumbing, Phase 3 pointed it at the product catalogue, Phase 4 turned an
+accepted recommendation into a reviewable email. Phase 5 is where something finally leaves the
+machine — which is a different kind of change from everything before it, and worth being slow about.
 
 | # | Feature | Reads | Writes | Schema change |
 | --- | --- | --- | --- | --- |
-| 1 | **Email generation** | lead + company + **accepted** recommendations | new `email_drafts` table | yes |
-| 2 | **Follow-up generation** | lead + prior activity + email history | `activities` (`Follow-up` type exists) | none |
-| 3 | **Company analysis** | company profile | a `company_analyses` row | probably |
+| 1 | **Real email sending** | approved drafts | send log, `delivery_mode` | small |
+| 2 | **Follow-up generation** | lead + activity + sent email history | `activities` (`Follow-up` exists) | none |
+| 3 | **Email scheduling** | approved drafts | a queue table | yes |
 | 4 | **Local RAG / Knowledge Base** | uploaded documents | `documents` + a local vector store | yes |
-| 5 | **Mailbox integration** | drafts | send log | yes |
+| 5 | **Company analysis at scale** | company profiles | `company_analyses` (exists) | none |
 
-### Recommended Phase 4 architecture
+### Recommended Phase 5 architecture
 
-**Start with email drafting from an accepted recommendation.** Phase 3 already produces exactly the
-inputs a good email needs — a primary product, a written reason, quoted evidence and a sales angle —
-and the *accepted* status means a human already agreed with the premise. Drafting from an accepted
-recommendation rather than from the lead directly is the difference between a grounded email and a
-guess.
+**Start with SMTP, not OAuth.** `EmailServiceInterface` already exists and
+`EmailServiceProvider` already recognises `smtp`, `gmail` and `microsoft_graph` as driver names —
+they throw today. SMTP is by far the smallest of the three: a host, a port, credentials, no consent
+screen, no token refresh, no Google verification review. Getting one real transport working end to
+end will surface every question the OAuth ones also raise, at a fraction of the cost.
 
 Concretely:
 
-- **New `email_drafts` table**, referencing `lead_id` and the `lead_product_matches` row it was built
-  from. Keep every draft, like analyses — never overwrite.
-- **A `Suggested → Approved → Sent` lifecycle**, mirroring `RecommendationStatus`. Nothing is
-  sendable without an explicit approval, and sending should be a separate deliberate step from
-  drafting.
-- **`PromptLibrary::emailGeneration()`** with its own system prompt, and `AiRequestType::EmailGeneration`
-  (already declared). No prompt in a controller.
-- **Reuse `generateStructured()`** with a schema of `{subject, body, tone, talking_points}` rather
-  than free text, so the subject line is a real field and the body can be validated for length.
-- **Extend the no-invented-facts rule to product claims.** Phase 3 guards against inventing facts
-  about the *company*; an email also asserts things about *your products*. The generated body should
-  be checkable against the product record, and anything about regulatory clearance should be
-  refused unless it is in the database verbatim.
+- **`SmtpEmailService implements EmailServiceInterface`.** It must refuse a draft that is not
+  `Approved`, exactly as `LocalTestEmailService` does — that check lives in the transport
+  deliberately, so a new implementation cannot skip it by accident.
+- **`EmailPrivacyTest::test_no_other_implementation_of_the_email_interface_exists()` will fail.**
+  That is intentional. Updating it is the moment to re-read section 34 of the Phase 4 brief and
+  decide, deliberately, that real emails may now leave this machine.
+- **Credentials are the new privacy surface.** Everything stored so far is data you typed. An SMTP
+  password is a secret, and `email_settings` is a plain-text local table — it belongs in `.env` with
+  the AI endpoint, not in a user-writable store.
+- **`Queued` and `Failed` need to start meaning something.** Both statuses exist and nothing sets
+  them. A real transport makes `Failed` reachable, which makes retry a real question.
+- **Sending should stay a foreground action with a confirmation**, at least at first. A background
+  worker that sends approved drafts is a very short step from a system that sends without anyone
+  watching.
 
-**Then follow-ups**, which need email history to exist first. `ActivityType::FollowUp` and
-`Email` are already declared, so those entries need no migration.
+**Then follow-ups**, which need sent-email history to be real before they mean anything.
+`ActivityType::FollowUp` and `Email` are already declared, so no migration is needed — and Phase 4
+already records an activity on every send.
 
-**Defer RAG until there is a reason.** It is the largest piece by far, and the portfolio currently
-fits in a prompt. It becomes worthwhile when you have real documents — spec sheets, clinical papers —
-that the model should quote from.
+**Defer scheduling.** It is where "human approval is mandatory" quietly erodes: a scheduled send is a
+decision made once and executed later, possibly after the situation has changed. If it is built, the
+approval should be re-confirmed at send time, not just at schedule time.
 
-### Carried forward from Phases 2 and 3
+**Defer RAG until there is a reason.** It is the largest piece by far and the portfolio still fits in
+a prompt. It becomes worthwhile when there are real documents — spec sheets, clinical papers — that
+the model should quote from rather than paraphrase.
 
-- **Performance is the practical constraint, not capability.** A Phase 3 analysis takes ~4-5 minutes
-  on CPU. Email drafting will be similar. Before building Phase 4, either get the GPU working (see
-  [docs/LOCAL_AI.md](docs/LOCAL_AI.md)) or plan for the queue — Laravel's `database` driver is
-  already configured, and a job that takes minutes belongs in a worker, not a browser request.
-- **Streaming becomes genuinely worth adding** once a human is watching an email being written.
-  `OllamaAIService` was shaped for it: all completions funnel through one method.
+### Carried forward from Phases 2–4
+
+- **Performance is the practical constraint, not capability.** An email takes one to two minutes on
+  CPU, an analysis four to five. Both run inside a browser request today. Laravel's `database` queue
+  driver is already configured and a job that takes minutes belongs in a worker.
+- **Streaming is now genuinely worth adding.** Watching an email being written is a much better
+  experience than watching a spinner for ninety seconds. `OllamaAIService` was shaped for it — all
+  completions funnel through one method.
 - **Small models under-fill large schemas.** Phase 3 needed an explicit "every field must be filled"
-  instruction to stop qwen3:4b leaving `reason` and `sales_angle` blank. Expect the same, and prefer
-  a compact schema over an exhaustive one.
+  instruction; Phase 4's schema requires only `variants` for the same reason. Prefer a compact schema
+  over an exhaustive one.
+- **The model will flatter if you let it.** Phase 3's failure mode was forcing a match, company
+  research's was answering from memory, Phase 4's was marketing language and invented credentials.
+  Whatever Phase 5 generates will have its own, and it is worth naming explicitly in the system
+  prompt rather than hoping the base prompt covers it.
 - **Human review is not optional.** Every generated artefact needs approval before it leaves the
-  machine. That principle held through Phases 1-3 and matters most in Phase 4.
+  machine. That principle held through Phases 1–4 and matters most the moment sending is real.
 
 Every step stays local. No cloud AI provider may ever be bound to `AIServiceInterface`.

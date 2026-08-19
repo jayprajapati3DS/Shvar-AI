@@ -110,16 +110,17 @@ class AiPagesTest extends TestCase
             ->assertInertia(function (Assert $page) {
                 $types = collect($page->toArray()['props']['requestTypes']);
 
-                // Phase 2 shipped General; Phase 3 shipped ProductRecommendation.
-                foreach (['general', 'product_recommendation'] as $built) {
+                // Phase 2 shipped General; Phase 3 ProductRecommendation;
+                // Phase 4 EmailGeneration.
+                foreach (['general', 'product_recommendation', 'email_generation'] as $built) {
                     $this->assertTrue(
                         $types->firstWhere('value', $built)['implemented'],
                         "{$built} should be marked implemented.",
                     );
                 }
 
-                // Still unbuilt - email generation and follow-ups are Phase 4.
-                foreach (['company_analysis', 'email_generation', 'follow_up_generation'] as $later) {
+                // Still unbuilt - follow-up generation is a later phase.
+                foreach (['company_analysis', 'follow_up_generation'] as $later) {
                     $this->assertFalse(
                         $types->firstWhere('value', $later)['implemented'],
                         "{$later} must not be marked implemented yet.",

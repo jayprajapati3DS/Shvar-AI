@@ -94,11 +94,7 @@ class ApplicationSmokeTest extends TestCase
         Product::factory()->count(3)->create();
         Product::factory()->inactive()->create();
 
-        $this->get(route('email-drafts.index'))
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Placeholders/EmailDrafts')
-                ->where('context.leadsAwaitingOutreach', 1));
-
+        // Email Drafts graduated out of PlaceholderController in Phase 4.
         $this->get(route('follow-ups.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Placeholders/FollowUps')
@@ -270,17 +266,29 @@ class ApplicationSmokeTest extends TestCase
         );
     }
 
-    public function test_no_route_is_registered_for_a_phase_two_feature(): void
+    public function test_no_route_is_registered_for_an_unbuilt_phase(): void
     {
         $paths = collect(Route::getRoutes())->map(fn ($route) => $route->uri())->all();
 
-        // Phase 4 features must not have crept in with Phase 3.
-        foreach (['send-email', 'scrape', 'enrich', 'emails', 'gmail', 'outlook'] as $forbidden) {
+        // Phase 5 features must not have crept in with Phase 4. Email
+        // generation itself is now built - but real delivery is not, and an
+        // OAuth callback route is how that would first appear.
+        foreach (['scrape', 'enrich', 'gmail', 'outlook', 'oauth', 'discover'] as $forbidden) {
             $this->assertNotContains($forbidden, $paths);
         }
 
-        // And no email-generation request type is produced by anything.
-        $this->assertFalse(\App\Enums\AiRequestType::EmailGeneration->isImplemented());
+        // Follow-up generation is still unbuilt.
         $this->assertFalse(\App\Enums\AiRequestType::FollowUpGeneration->isImplemented());
+    }
+
+    public function test_nothing_can_send_a_real_email(): void
+    {
+        // Phase 4 ships simulated sending only. The bound service must be the
+        // local one, and it must say so about itself.
+        $service = app(\App\Services\Email\EmailServiceInterface::class);
+
+        $this->assertInstanceOf(\App\Services\Email\LocalTestEmailService::class, $service);
+        $this->assertTrue($service->isSimulated());
+        $this->assertSame('local', config('email.driver'));
     }
 }
