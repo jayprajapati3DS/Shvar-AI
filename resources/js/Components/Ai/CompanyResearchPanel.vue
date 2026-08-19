@@ -130,7 +130,7 @@ function preview(finding: CompanyResearchFinding): string {
         <div v-if="researching" class="px-5 py-8 text-center">
             <p class="text-sm font-medium text-slate-700">Reading the website…</p>
             <p class="mt-1 text-xs text-slate-500">
-                Fetching the page, then reading it with the local model. This takes a couple of minutes on CPU.
+                Fetching the page, then reading it with the local model — in the background, so this page stays yours.
             </p>
         </div>
 

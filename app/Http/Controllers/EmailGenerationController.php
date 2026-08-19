@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\AiJobType;
 use App\Enums\RecommendationStatus;
 use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\GenerateEmailRequest;
 use App\Models\EmailGeneration;
 use App\Models\Lead;
 use App\Models\LeadProductMatch;
-use App\Services\AI\Exceptions\AiException;
+use App\Services\AI\Jobs\AiJobQueue;
 use App\Services\Email\EmailDraftEditor;
-use App\Services\Email\EmailGenerator;
 use Illuminate\Http\RedirectResponse;
 
 /**
@@ -35,7 +35,7 @@ class EmailGenerationController extends Controller
     use RedirectsToOrigin;
 
     public function __construct(
-        private readonly EmailGenerator $generator,
+        private readonly AiJobQueue $queue,
         private readonly EmailDraftEditor $editor,
     ) {}
 
@@ -71,36 +71,34 @@ class EmailGenerationController extends Controller
 
         $replacing = $this->resolveReplacing($lead, $request->integer('regenerate_from'));
 
-        try {
-            $generation = $this->generator->generate(
-                $lead,
-                $set,
-                $request->input('extra_instructions'),
-                $replacing,
+        if ($this->queue->activeFor(AiJobType::EmailGeneration, $lead) !== null) {
+            return $this->backTo('leads.show', $lead->id)->with(
+                'info',
+                'Drafts for this lead are already being written. Watch it in the AI activity tray.',
             );
-        } catch (AiException $e) {
-            // The attempt is already in the local AI log by this point.
-            return $this->backTo('leads.show', $lead->id)->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
         }
 
-        $count = $generation->drafts()->count();
-        $products = $generation->recommendations()->count();
-
-        $message = sprintf(
-            '%d draft(s) about %s, written by %s in %ss. Nothing has been sent - review, edit and approve first.',
-            $count,
-            $products === 1
-                ? ($set[0]->product?->name ?? 'the selected product')
-                : $products.' products',
-            $generation->model,
-            number_format($generation->seconds(), 1),
+        // Ids, not models. The job re-resolves them when it runs, because a
+        // recommendation can be rejected or a product deactivated while it waits
+        // its turn, and an email written from a direction that is no longer
+        // approved is exactly what these checks exist to prevent.
+        $this->queue->push(
+            AiJobType::EmailGeneration,
+            $lead,
+            sprintf('Writing to %s', $lead->full_name),
+            route('leads.show', $lead),
+            [
+                'recommendation_ids' => array_map(fn (LeadProductMatch $m) => $m->id, $set),
+                'extra_instructions' => $request->input('extra_instructions'),
+                'regenerate_from' => $replacing?->id,
+            ],
         );
 
-        if ($replacing !== null) {
-            $message .= ' Compare them against the previous version before choosing.';
-        }
-
-        return $this->backTo('leads.show', $lead->id)->with('success', $message);
+        return $this->backTo('leads.show', $lead->id)->with(
+            'info',
+            'Writing queued. It takes a minute or two on this machine - carry on working, the AI '
+            .'activity tray will tell you when the drafts are ready. Nothing is sent either way.',
+        );
     }
 
     /**

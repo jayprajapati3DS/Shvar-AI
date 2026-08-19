@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\ActivityType;
+use App\Enums\AiJobType;
 use App\Enums\RecommendationStatus;
 use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Resources\LeadAnalysisResource;
@@ -12,8 +13,7 @@ use App\Models\Activity;
 use App\Models\Lead;
 use App\Models\LeadAnalysis;
 use App\Models\LeadProductMatch;
-use App\Services\AI\Exceptions\AiException;
-use App\Services\AI\Recommendation\AiProductMatcher;
+use App\Services\AI\Jobs\AiJobQueue;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,42 +34,43 @@ class LeadAnalysisController extends Controller
     use RedirectsToOrigin;
 
     public function __construct(
-        private readonly AiProductMatcher $matcher,
+        private readonly AiJobQueue $queue,
     ) {}
 
     /**
-     * Run a fresh analysis.
+     * Queue a fresh analysis.
+     *
+     * This used to run the model inside this request, which meant four or five
+     * minutes of staring at a page that could not be used. It now hands the work
+     * to a background worker and returns immediately - the activity tray follows
+     * it from there, on whatever page you happen to be on.
      *
      * Always additive: a previous analysis is never modified or deleted, so
-     * "Regenerate" builds history rather than replacing it.
+     * re-running builds history rather than replacing it.
      */
     public function store(Lead $lead): RedirectResponse
     {
-        try {
-            $analysis = $this->matcher->analyse($lead);
-        } catch (AiException $e) {
-            // The attempt is already in the local AI log by this point.
-            return $this->backTo('leads.show', $lead->id)->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
-        }
-
-        $count = $analysis->recommendations()->count();
-
-        // An empty result is a legitimate outcome, not a failure - the model
-        // deciding this company is outside the market. Say so plainly.
-        if ($count === 0) {
+        // One at a time per lead. Without this, a second click on a button that
+        // appeared to do nothing would queue a second five-minute run.
+        if ($this->queue->activeFor(AiJobType::LeadAnalysis, $lead) !== null) {
             return $this->backTo('leads.show', $lead->id)->with(
                 'info',
-                'Analysis complete: the local model found no product in the portfolio that the stored '
-                .'information supports recommending.',
+                'An analysis of this lead is already running. Watch it in the AI activity tray.',
             );
         }
 
-        return $this->backTo('leads.show', $lead->id)->with('success', sprintf(
-            'Analysis complete: %d recommendation(s) from %s in %ss. Review and accept the ones you want.',
-            $count,
-            $analysis->model,
-            number_format((float) $analysis->seconds(), 1),
-        ));
+        $this->queue->push(
+            AiJobType::LeadAnalysis,
+            $lead,
+            sprintf('Analysing %s', $lead->full_name),
+            route('leads.show', $lead),
+        );
+
+        return $this->backTo('leads.show', $lead->id)->with(
+            'info',
+            'Analysis queued. It takes a few minutes on this machine - carry on working, '
+            .'the AI activity tray will tell you when it is done.',
+        );
     }
 
     /**

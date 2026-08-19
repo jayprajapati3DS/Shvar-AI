@@ -246,7 +246,52 @@ export interface SharedProps {
         error: string | null;
         info: string | null;
     };
+    /** Background AI work, shared with every page so the tray is never stale. */
+    ai_jobs: AiJobsState;
     [key: string]: unknown;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Background AI work                                                          */
+/* -------------------------------------------------------------------------- */
+
+export type AiJobStatus = 'Queued' | 'Running' | 'Done' | 'Failed' | 'Cancelled';
+
+/** One piece of AI work, from the moment it was asked for. */
+export interface AiJob {
+    id: number;
+    type: string;
+    type_label: string;
+    status: AiJobStatus;
+    status_label: string;
+    color: string;
+    /** Queued or Running - still expected to produce something. */
+    active: boolean;
+    label: string;
+    /** Short class name of what it is about - "Lead", "Company", "EmailReply". */
+    subject_type: string | null;
+    subject_id: number | null;
+    result_url: string | null;
+    result_level: string | null;
+    result_summary: string | null;
+    error: string | null;
+    elapsed_seconds: number;
+    /**
+     * 0 to 1, and an ESTIMATE. A local model returns one response at the end, so
+     * there is nothing real to measure - this is elapsed time against a typical
+     * run. The tray says as much rather than passing it off as measured.
+     */
+    progress: number;
+    queued_at: string | null;
+    finished_at: string | null;
+}
+
+export interface AiJobsState {
+    jobs: AiJob[];
+    active: number;
+    /** Work is waiting and no worker is coming for it. */
+    stalled: boolean;
+    start_command: string;
 }
 
 /* -------------------------------------------------------------------------- */

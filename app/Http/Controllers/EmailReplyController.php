@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\AiJobType;
 use App\Enums\ReplyClassification;
 use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Models\EmailReply;
-use App\Services\AI\Exceptions\AiException;
+use App\Services\AI\Jobs\AiJobQueue;
 use App\Services\Email\Outlook\OutlookException;
 use App\Services\Email\Outlook\OutlookMailboxSync;
-use App\Services\Email\ReplyClassifier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,7 +29,7 @@ class EmailReplyController extends Controller
 
     public function __construct(
         private readonly OutlookMailboxSync $sync,
-        private readonly ReplyClassifier $classifier,
+        private readonly AiJobQueue $queue,
     ) {}
 
     public function index(Request $request): Response
@@ -89,24 +89,30 @@ class EmailReplyController extends Controller
         return $this->backTo('replies.index')->with($result['imported'] > 0 ? 'success' : 'info', $message);
     }
 
-    /** Have the local model read one reply and suggest what to do. */
+    /**
+     * Have the local model read one reply and suggest what to do.
+     *
+     * Queued rather than run here. Half a minute each is bearable once and
+     * tiresome across a morning's replies; queueing them all means the worker
+     * gets through the batch while you read the first one.
+     */
     public function classify(EmailReply $reply): RedirectResponse
     {
-        try {
-            $outcome = $this->classifier->classify($reply);
-        } catch (AiException $e) {
-            return $this->backTo('replies.index')->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
+        if ($this->queue->activeFor(AiJobType::ReplyClassification, $reply) !== null) {
+            return $this->backTo('replies.index')->with('info', 'That reply is already being read.');
         }
 
-        $classification = $outcome['reply']->classification;
+        $this->queue->push(
+            AiJobType::ReplyClassification,
+            $reply,
+            sprintf('Reading a reply from %s', $reply->from_name ?: $reply->from_address),
+            route('replies.index'),
+        );
 
-        return $this->backTo('replies.index')->with('success', sprintf(
-            'Read as "%s".%s',
-            $classification?->value ?? 'Unclear',
-            $outcome['task'] !== null
-                ? ' A follow-up was suggested - review it before relying on it.'
-                : ' No follow-up suggested.',
-        ));
+        return $this->backTo('replies.index')->with(
+            'info',
+            'Queued. The AI activity tray will tell you what it made of it.',
+        );
     }
 
     /** Mark a reply as dealt with. */

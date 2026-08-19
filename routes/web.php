@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\ActivityController;
+use App\Http\Controllers\AiJobController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyResearchController;
 use App\Http\Controllers\DashboardController;
@@ -219,6 +220,24 @@ Route::post('follow-ups/{task}/dismiss', [FollowUpTaskController::class, 'dismis
     ->name('follow-ups.dismiss');
 Route::post('follow-ups/{task}/reopen', [FollowUpTaskController::class, 'reopen'])
     ->name('follow-ups.reopen');
+
+// ---- Background AI work ---------------------------------------------------
+//
+// The four slow AI actions - lead analysis, email generation, company research
+// and reading a reply - are handed to a queue worker rather than run inside the
+// browser request. These routes are how the activity tray follows them.
+//
+// The index is plain JSON, not Inertia: it is polled every couple of seconds
+// while something is running, and an Inertia response would rewrite the page and
+// stack up history entries for a page nobody navigated to.
+//
+// Nothing here starts work. Queueing happens on the action's own route, where
+// the checks about what may be generated already live.
+
+Route::get('ai/jobs', [AiJobController::class, 'index'])->name('ai.jobs.index');
+Route::post('ai/jobs/dismiss-all', [AiJobController::class, 'dismissAll'])->name('ai.jobs.dismiss-all');
+Route::post('ai/jobs/{aiJob}/dismiss', [AiJobController::class, 'dismiss'])->name('ai.jobs.dismiss');
+Route::post('ai/jobs/{aiJob}/cancel', [AiJobController::class, 'cancel'])->name('ai.jobs.cancel');
 
 // ---- Remaining placeholder -----------------------------------------------
 //

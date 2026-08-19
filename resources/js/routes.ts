@@ -137,6 +137,15 @@ export const routes = {
         dismiss: (id: number) => `/follow-ups/${id}/dismiss`,
         reopen: (id: number) => `/follow-ups/${id}/reopen`,
     },
+    // Background AI work. `index` is polled while something is running, so it
+    // returns plain JSON rather than an Inertia page.
+    aiJobs: {
+        index: () => '/ai/jobs',
+        dismiss: (id: number) => `/ai/jobs/${id}/dismiss`,
+        dismissAll: () => '/ai/jobs/dismiss-all',
+        cancel: (id: number) => `/ai/jobs/${id}/cancel`,
+    },
+
     knowledgeBase: () => '/knowledge-base',
 
     settings: {

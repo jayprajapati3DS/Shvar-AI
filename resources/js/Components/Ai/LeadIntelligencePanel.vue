@@ -7,6 +7,7 @@ import RecommendationCard from '@/Components/Ai/RecommendationCard.vue';
 import Badge from '@/Components/Badge.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import Modal from '@/Components/Modal.vue';
+import { useAiJobFor } from '@/composables/useAiJobs';
 import { useToasts } from '@/composables/useToasts';
 import { routes } from '@/routes';
 import type { AiStatus, LeadAnalysis, LeadProductMatch } from '@/types/ai';
@@ -29,7 +30,14 @@ const { leadId, analysis, history, status } = defineProps<{
 
 const { error } = useToasts();
 
-const analyzing = ref(false);
+/**
+ * The analysis job for THIS lead, if one is going.
+ *
+ * Read from the shared job state rather than a local flag, so it survives
+ * navigating away and back - which is the point of running in the background.
+ */
+const running = useAiJobFor('lead_analysis', 'Lead', () => leadId);
+
 const reviewing = ref<number | null>(null);
 const showHistory = ref(false);
 const viewing = ref<LeadAnalysis | null>(null);
@@ -48,20 +56,22 @@ const others = computed(() => recommendations.value.filter((r) => r !== primary.
 const pendingCount = computed(() => recommendations.value.filter((r) => r.status === 'Suggested').length);
 
 /**
- * `analyzing` alone gates the button, so a double-click cannot start a second
- * run - which on a local model would mean waiting minutes for a duplicate.
+ * Hand the analysis to a background worker.
+ *
+ * The request returns in milliseconds now, so there is nothing to wait for here
+ * - `running` comes from the job itself, which means the button still reads
+ * "Analysing" after you navigate away and come back, and the previous analysis
+ * stays on screen and usable the whole time it runs.
+ *
+ * The server refuses a second run for the same lead regardless. This is the same
+ * check made visible before the click rather than after it.
  */
 function analyze() {
-    if (analyzing.value || !status.ready) {
+    if (running.value || !status.ready) {
         return;
     }
 
-    analyzing.value = true;
-
-    router.post(routes.leads.analyze(leadId), {}, {
-        preserveScroll: true,
-        onFinish: () => (analyzing.value = false),
-    });
+    router.post(routes.leads.analyze(leadId), {}, { preserveScroll: true });
 }
 
 function accept(match: LeadProductMatch) {
@@ -130,11 +140,11 @@ async function viewPast(entry: LeadAnalysis) {
                 <button
                     type="button"
                     class="btn-primary"
-                    :disabled="analyzing || !status.ready"
+                    :disabled="!!running || !status.ready"
                     @click="analyze"
                 >
                     <svg
-                        v-if="analyzing"
+                        v-if="running"
                         class="size-4 animate-spin"
                         viewBox="0 0 24 24"
                         fill="none"
@@ -143,21 +153,28 @@ async function viewPast(entry: LeadAnalysis) {
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
                     </svg>
-                    {{ analyzing ? 'Analyzing…' : current ? 'Regenerate Analysis' : 'Analyze Lead' }}
+                    {{ running ? 'Analysing…' : current ? 'Regenerate Analysis' : 'Analyze Lead' }}
                 </button>
             </div>
         </header>
 
-        <!-- Loading -->
-        <div v-if="analyzing" class="px-5 py-8 text-center">
-            <p class="text-sm font-medium text-slate-700">Analyzing lead with local AI…</p>
-            <p class="mt-1 text-xs text-slate-500">
-                Running on {{ status.model }} on this computer. This can take a while on CPU.
+        <!--
+            Running. A strip, not a screen: the analysis already on this page
+            stays readable and its recommendations stay actionable while a new
+            one is written. Replacing the panel with a spinner would take the
+            page away for five minutes, which is what this change was for.
+        -->
+        <div v-if="running" class="flex items-center gap-3 border-b border-indigo-100 bg-indigo-50 px-5 py-3">
+            <span class="size-2 shrink-0 animate-pulse rounded-full bg-indigo-500" aria-hidden="true" />
+            <p class="min-w-0 flex-1 text-xs text-indigo-900">
+                Analysing with {{ status.model }} in the background. Carry on working — the AI activity tray
+                will tell you when it is done.
             </p>
+            <span class="shrink-0 font-mono text-xs text-indigo-700">{{ running.elapsed_seconds }}s</span>
         </div>
 
         <!-- AI unavailable -->
-        <div v-else-if="!status.ready" class="border-b border-slate-200 bg-amber-50 px-5 py-4">
+        <div v-if="!status.ready" class="border-b border-slate-200 bg-amber-50 px-5 py-4">
             <p class="text-sm font-semibold text-amber-900">
                 {{ status.message ?? 'Local AI is not available.' }}
             </p>

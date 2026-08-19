@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
+import AiJobTray from '@/Components/Ai/AiJobTray.vue';
 import ToastHub from '@/Components/ToastHub.vue';
 import { useToasts } from '@/composables/useToasts';
 import { routes } from '@/routes';
@@ -131,6 +132,10 @@ watch(() => page.url, () => (sidebarOpen.value = false));
 <template>
     <div class="min-h-screen lg:flex">
         <ToastHub />
+
+        <!-- Background AI work. Mounted here, once, so a job started on a lead
+             page is still being followed after you navigate away from it. -->
+        <AiJobTray />
 
         <!-- Mobile drawer backdrop -->
         <div

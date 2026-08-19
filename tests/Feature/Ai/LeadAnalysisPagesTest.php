@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Ai;
 
+use App\Enums\AiJobStatus;
 use App\Enums\RecommendationStatus;
 use App\Enums\RecommendationType;
 use App\Models\Activity;
+use App\Models\AiJob;
 use App\Models\Company;
 use App\Models\Lead;
 use App\Models\LeadAnalysis;
@@ -114,12 +116,21 @@ class LeadAnalysisPagesTest extends TestCase
     {
         $this->fakeAi();
 
+        // The request now only queues the work, so what comes back says so. The
+        // outcome lands on the job record, which is what the activity tray
+        // reads - the tests below check it there rather than in the flash.
         $this->post(route('leads.analyze', $this->lead))
             ->assertRedirect()
-            ->assertSessionHas('success', fn (string $m) => str_contains($m, 'Analysis complete'));
+            ->assertSessionHas('info', fn (string $m) => str_contains($m, 'queued'));
 
         $this->assertDatabaseCount('lead_analyses', 1);
         $this->assertDatabaseCount('lead_product_matches', 1);
+
+        $job = AiJob::latest('id')->firstOrFail();
+
+        $this->assertSame(AiJobStatus::Done, $job->status);
+        $this->assertStringContainsString('recommendation(s)', (string) $job->result_summary);
+        $this->assertSame(route('leads.show', $this->lead), $job->result_url);
     }
 
     public function test_the_analysis_appears_on_the_lead_page(): void
@@ -148,28 +159,39 @@ class LeadAnalysisPagesTest extends TestCase
             'recommended_products' => [],
         ]);
 
-        $this->post(route('leads.analyze', $this->lead))
-            ->assertRedirect()
-            // Not an error: the model correctly declining to force a match.
-            ->assertSessionHas('info', fn (string $m) => str_contains($m, 'no product'));
+        $this->post(route('leads.analyze', $this->lead))->assertRedirect();
 
         $this->assertDatabaseCount('lead_analyses', 1);
         $this->assertDatabaseCount('lead_product_matches', 0);
+
+        $job = AiJob::latest('id')->firstOrFail();
+
+        // Not an error: the model correctly declining to force a match. The
+        // tray colours it by this level, so it must not be a failure.
+        $this->assertSame(AiJobStatus::Done, $job->status);
+        $this->assertSame('info', $job->result_level);
+        $this->assertStringContainsString('No product', (string) $job->result_summary);
     }
 
     public function test_a_failed_analysis_shows_a_friendly_error(): void
     {
         Http::fake(fn () => throw new ConnectionException('Connection refused'));
 
-        $this->post(route('leads.analyze', $this->lead))
-            ->assertRedirect()
-            ->assertSessionHas('error', fn (string $m) => str_contains($m, 'Unable to connect to Ollama'));
+        // A failure in a worker must not come back out of the browser request.
+        // Under QUEUE_CONNECTION=sync - a reasonable choice for someone who does
+        // not want a second terminal - rethrowing would turn this into a 500.
+        $this->post(route('leads.analyze', $this->lead))->assertRedirect();
 
         $this->assertDatabaseCount('lead_analyses', 0);
 
-        $error = session('error');
-        $this->assertStringNotContainsString('Exception', $error);
-        $this->assertStringNotContainsString(base_path(), $error);
+        $job = AiJob::latest('id')->firstOrFail();
+
+        $this->assertSame(AiJobStatus::Failed, $job->status);
+        $this->assertStringContainsString('Unable to connect to Ollama', (string) $job->error);
+
+        // Still written for a person to read, wherever it is displayed.
+        $this->assertStringNotContainsString('Exception', (string) $job->error);
+        $this->assertStringNotContainsString(base_path(), (string) $job->error);
     }
 
     public function test_analysing_never_changes_the_lead_status_or_priority(): void

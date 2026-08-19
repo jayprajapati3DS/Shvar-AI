@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Email;
 
+use App\Enums\AiJobStatus;
 use App\Enums\AiRequestStatus;
 use App\Enums\AiRequestType;
 use App\Enums\EmailDraftStatus;
 use App\Enums\EmailVariant;
 use App\Enums\RecommendationStatus;
+use App\Models\AiJob;
 use App\Models\AiRequest;
 use App\Models\Company;
 use App\Models\EmailDraft;
@@ -495,11 +497,19 @@ class EmailGenerationTest extends TestCase
     {
         Http::fake(fn () => throw new ConnectionException('Connection refused'));
 
+        // Generation happens in a worker now, so the failure is recorded on the
+        // job rather than flashed. What must not happen either way is the
+        // exception reaching the browser.
         $this->post(route('leads.emails.generate', $this->lead), [
             'recommendation_id' => $this->recommendation->id,
-        ])->assertRedirect()->assertSessionHas('error');
+        ])->assertRedirect();
 
         $this->assertDatabaseCount('email_drafts', 0);
+
+        $job = AiJob::latest('id')->firstOrFail();
+
+        $this->assertSame(AiJobStatus::Failed, $job->status);
+        $this->assertStringContainsString('Ollama', (string) $job->error);
     }
 
     public function test_an_ai_failure_is_recorded_in_the_local_log(): void

@@ -352,7 +352,8 @@ function formatDate(value: string | null): string {
             </div>
 
             <p class="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                Generation can take a minute or two on a local model — longer with more products.
+                Writing happens in the background and takes a minute or two on a local model — longer with more
+                products. Close this and carry on; the AI activity tray will tell you when the drafts are ready.
                 Three drafts are created and left unsent — you review, edit and approve each one
                 yourself.
             </p>
@@ -368,7 +369,7 @@ function formatDate(value: string | null): string {
                 :disabled="form.processing || !form.recommendation_id"
                 @click="generate"
             >
-                {{ form.processing ? 'Writing…' : 'Generate' }}
+                {{ form.processing ? 'Queueing…' : 'Generate' }}
             </button>
         </template>
     </Modal>

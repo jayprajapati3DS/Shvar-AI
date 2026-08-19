@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Email;
 
 use App\Enums\RecommendationStatus;
+use App\Models\AiJob;
 use App\Models\Company;
 use App\Models\EmailGeneration;
 use App\Models\Lead;
@@ -297,12 +298,17 @@ class MultiProductEmailTest extends TestCase
                 $this->recommendations['segmenter']->id,
                 $this->recommendations['viewer']->id,
             ],
-        ])->assertRedirect()->assertSessionHas('success');
+        ])->assertRedirect()->assertSessionHas('info');
 
         $generation = EmailGeneration::latest('id')->first();
 
         $this->assertCount(3, $generation->recommendations);
-        $this->assertStringContainsString('3 products', (string) session('success'));
+
+        // The summary moved to the job record when generation moved to a worker.
+        $this->assertStringContainsString(
+            '3 products',
+            (string) AiJob::latest('id')->firstOrFail()->result_summary,
+        );
     }
 
     public function test_too_many_secondary_products_are_rejected_with_an_explanation(): void

@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Enums\AiJobType;
 use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Resources\CompanyAnalysisResource;
 use App\Models\Company;
 use App\Models\CompanyAnalysis;
-use App\Services\AI\Exceptions\AiException;
+use App\Services\AI\Jobs\AiJobQueue;
 use App\Services\AI\Research\CompanyResearcher;
 use App\Services\AI\Research\CompanyResearchSchema;
-use App\Services\Research\Exceptions\ResearchException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,6 +32,7 @@ class CompanyResearchController extends Controller
 
     public function __construct(
         private readonly CompanyResearcher $researcher,
+        private readonly AiJobQueue $queue,
     ) {}
 
     /**
@@ -63,28 +64,26 @@ class CompanyResearchController extends Controller
             ]);
         }
 
-        try {
-            $analysis = $this->researcher->research($company, $url);
-        } catch (ResearchException|AiException $e) {
-            // The AI attempt, if it got that far, is already in the local log.
-            return $this->backTo('companies.show', $company->id)->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
-        }
-
-        $found = count((array) $analysis->findings);
-
-        if ($found === 0) {
+        if ($this->queue->activeFor(AiJobType::CompanyResearch, $company) !== null) {
             return $this->backTo('companies.show', $company->id)->with(
                 'info',
-                'The page was read, but nothing on it could be verified as a company fact. '
-                .'Sites built entirely in JavaScript often look empty to a simple fetch.',
+                'Research on this company is already running. Watch it in the AI activity tray.',
             );
         }
 
-        return $this->backTo('companies.show', $company->id)->with('success', sprintf(
-            'Read %s and found %d verified detail(s). Review them before they are saved.',
-            $analysis->requested_url,
-            $found,
-        ));
+        $this->queue->push(
+            AiJobType::CompanyResearch,
+            $company,
+            sprintf('Researching %s', $company->name),
+            route('companies.show', $company),
+            ['url' => $url],
+        );
+
+        return $this->backTo('companies.show', $company->id)->with(
+            'info',
+            'Research queued. The page is fetched and read by the local model in the background - '
+            .'carry on working, the AI activity tray will tell you when it is done.',
+        );
     }
 
     /**

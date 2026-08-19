@@ -171,10 +171,25 @@ php artisan migrate:fresh --seed
 
 ```powershell
 $env:PATH = "C:\php;" + $env:PATH
-php artisan serve
+composer dev
 ```
 
 → <http://127.0.0.1:8000>
+
+`composer dev` starts the web server, the Vite dev server **and a background queue worker**
+together. The worker is what runs the slow AI actions — analysis, email generation, website
+research, reading a reply — outside the browser request, so the page stays usable while the local
+model works. See [Background AI work](#background-ai-work) below.
+
+If you would rather run the pieces separately, the web server alone is not enough:
+
+```powershell
+php artisan serve
+php artisan queue:work --tries=1 --timeout=3600   # second terminal
+```
+
+Without a worker, AI actions queue up and wait. The app says so plainly rather than spinning — the
+activity tray shows a warning with the command to run.
 
 ## 7. Running Vue
 
@@ -343,8 +358,12 @@ php artisan config:clear
 
 ```powershell
 $env:PATH = "C:\php;" + $env:PATH
-php artisan serve
+composer dev
 ```
+
+This starts the web server, Vite and the background queue worker together. `php artisan serve` on
+its own works too, but AI actions will sit in the queue until you also start
+`php artisan queue:work`.
 
 ### 7. Open Shvar AI Copilot
 
@@ -399,6 +418,38 @@ Every request lands in **Settings → AI Logs** with the full prompt and respons
 | `AI_LOGGING_ENABLED` | `true` | No |
 
 Full detail, data-flow diagram and troubleshooting: **[docs/LOCAL_AI.md](docs/LOCAL_AI.md)**.
+
+### Background AI work
+
+The four slow AI actions run in a queue worker, not in the browser request:
+
+| Action | Typical on CPU |
+| --- | --- |
+| Sales analysis of a lead | 4-5 min |
+| Writing email drafts | 1-2 min |
+| Company website research | ~1 min |
+| Reading a reply | ~30 sec |
+
+They take the same wall-clock time as before. What changed is that it is no longer *your* time - the
+page stays usable, you can navigate away, and an **AI activity tray** in the corner follows the work
+from wherever you are. Clicking a finished job takes you to where its output landed.
+
+Anything that drives Outlook stays in the browser request. Reading the mailbox and handing a draft
+to the compose window talk to the desktop application over COM, which belongs to the interactive
+session you are sitting in front of.
+
+Approval did not move with the work. A finished job leaves a suggestion on a page for a human to
+accept or throw away, exactly as before, and nothing here sends anything.
+
+**A worker has to be running.** `composer dev` starts one. If you run `php artisan serve` alone,
+queued work waits - and the tray detects that and shows you the command rather than spinning
+forever. `QUEUE_CONNECTION=sync` restores the old blocking behaviour if you prefer.
+
+The progress bar is an **estimate** and says so: a local model returns one response at the end, so
+there is nothing real to measure. It is elapsed time against a typical run, and it never reaches the
+end while the work is still going.
+
+Full detail: **[docs/BACKGROUND_AI.md](docs/BACKGROUND_AI.md)**.
 
 ---
 
@@ -716,17 +767,25 @@ Phase 2 specifically:
 14. **No streaming.** Requests use `"stream": false`, so a long response arrives all at once with a
     spinner in the meantime. The service is shaped so a streaming method can be added without
     changing callers; it was not built, per the Phase 2 scope.
-15. **Requests are synchronous.** A slow local model blocks that browser request until it finishes or
-    the timeout fires. No queue worker is involved.
+15. **A queue worker has to be running.** The four slow AI actions were moved off the browser request
+    and onto Laravel's `database` queue. `composer dev` starts a worker alongside the web server; if
+    you run `php artisan serve` alone, queued work waits. The activity tray detects this and shows
+    the command rather than leaving you watching a spinner. `QUEUE_CONNECTION=sync` restores the old
+    blocking behaviour if you would rather not run a worker at all.
 16. **The AI log grows unbounded.** Stored prompt/response text is capped per row, but the row count
     is not. Clear it from Settings → AI Logs when you want to.
 17. **The base system prompt is not the one that matters most.** Each AI feature has its own
     specialised system prompt — product recommendation, company research, email generation — because
     each has a different failure mode. Editing the base prompt in Settings does not change those.
 18. **Generation is slow on CPU.** An email takes one to two minutes on this machine, an analysis
-    four to five. It runs inside the browser request, so the page waits. Getting the GPU working
-    (see [docs/LOCAL_AI.md](docs/LOCAL_AI.md)) or moving generation to a queue worker are the two
-    ways out.
+    four to five. That is now spent in a background worker rather than in the page, so it costs you
+    attention instead of time — but it is still four to five minutes before there is anything to
+    read. Getting the GPU working (see [docs/LOCAL_AI.md](docs/LOCAL_AI.md)) is the way to make it
+    genuinely faster.
+
+    The progress bar in the activity tray is an **estimate**, and says so. A local model returns one
+    response at the end, so there is no real progress to report; the bar is elapsed time against a
+    typical run, and it never reaches the end while work is still going.
 19. **Unsupported-claim detection is a heuristic, not a proof.** It compares word overlap against the
     product record and is deliberately generous, so a fabricated claim phrased in the record's own
     vocabulary can slip past it. Read `claims_used` on the draft page before approving.
@@ -792,8 +851,9 @@ the model should quote from rather than paraphrase.
 ### Carried forward from Phases 2–4
 
 - **Performance is the practical constraint, not capability.** An email takes one to two minutes on
-  CPU, an analysis four to five. Both run inside a browser request today. Laravel's `database` queue
-  driver is already configured and a job that takes minutes belongs in a worker.
+  CPU, an analysis four to five. Both now run in a queue worker rather than a browser request, which
+  removes the waiting but not the wall-clock time. The GPU is the only thing that changes the
+  latter.
 - **Streaming is now genuinely worth adding.** Watching an email being written is a much better
   experience than watching a spinner for ninety seconds. `OllamaAIService` was shaped for it — all
   completions funnel through one method.
