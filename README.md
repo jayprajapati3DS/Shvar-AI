@@ -1,0 +1,666 @@
+# Shvar AI Copilot
+
+A private, local-only sales CRM with a local AI layer, for medical technology sales and business
+development.
+
+**Phase 1 — CRM/data foundation. Complete.**
+**Phase 2 — local AI through Ollama. Complete.**
+**Phase 3 — AI product recommendation. Complete.**
+
+---
+
+## 1. Project overview
+
+Shvar AI Copilot manages the sales pipeline for medical technology products and services: companies,
+the people at them, the leads you are working, and which of your products fit each one.
+
+It is being built into a local AI sales copilot. Phase 1 built the data foundation. Phase 2 built the
+local AI layer those features will run on — the service abstraction, the Ollama transport, structured
+output, prompt templates and a local request log — plus a Settings area to configure and test it.
+
+Phase 3 put that layer to work: opening a lead and pressing **Analyze Lead** reads the stored company
+information, matches it against your product portfolio, and returns recommendations with reasoning,
+evidence and a sales angle — for you to review. See
+**[docs/PRODUCT_INTELLIGENCE.md](docs/PRODUCT_INTELLIGENCE.md)**.
+
+Email generation and follow-up drafting are **Phase 4 and not yet built**.
+
+Phase 2 added a local AI layer: inference runs on your machine through
+[Ollama](https://ollama.com). See **[docs/LOCAL_AI.md](docs/LOCAL_AI.md)** for the data-flow and
+privacy detail, and section 9 below for setup.
+
+### What is deliberately NOT present
+
+| Not present | Why |
+| --- | --- |
+| OpenAI, Anthropic, Gemini, Azure, any cloud AI | Never — see Privacy |
+| AI email generation | Phase 4 |
+| Follow-up generation | Phase 4 |
+| Email sending, Gmail/Outlook | Phase 4 |
+| RAG / embeddings / vector database | Phase 4 |
+| Web scraping / lead enrichment | Phase 4 |
+| Autonomous agents | Phase 4 |
+| User accounts / login | Single-user local app |
+
+The AI request types produced today are `general` (the Playground) and `product_recommendation`
+(Analyze Lead). Nothing generates the email or follow-up types.
+
+Three tests enforce the boundary: one fails the build if a cloud AI hostname appears anywhere in
+`app/`, `resources/js/`, `routes/` or `config/`; one records every HTTP request the AI pages make and
+asserts each went to a local address; one posts endpoint overrides at the settings form and asserts
+the endpoint cannot be changed from the browser.
+
+### Privacy
+
+Everything runs on your machine.
+
+- All data lives in one local SQLite file: `database/database.sqlite`
+- **AI inference runs locally** through Ollama on `http://localhost:11434`
+- No cloud database, no cloud AI, no API keys, no analytics, no telemetry
+- No third-party fonts, scripts or CDNs — the default Laravel scaffold's Bunny Fonts
+  dependency was removed and replaced with a system font stack
+- The only network requests the app makes are to Ollama on loopback
+- Served over `localhost` only
+
+The accurate claim, rather than an absolute one: *AI inference is configured to run locally through
+Ollama, and the application does not intentionally send AI requests to external cloud services.*
+[docs/LOCAL_AI.md §4](docs/LOCAL_AI.md) sets out exactly what that covers and what it does not.
+
+---
+
+## 2. Requirements
+
+| Requirement | Minimum | This machine |
+| --- | --- | --- |
+| PHP | 8.2+ | **8.4.23** at `C:\php\php.exe` |
+| PHP extensions | `pdo_sqlite`, `mbstring`, `openssl`, `fileinfo`, `curl`, `zip`, `tokenizer`, `xml`, `ctype`, `bcmath` | all present |
+| Composer | 2.x | 2.10.1 |
+| Node.js | 20.19+ / 22.12+ | 24.15.0 |
+| npm | 10+ | 11.12.1 |
+| **Ollama** | any recent version | **0.32.14** ✅ installed and running |
+| Local model | any | **qwen3:4b** ✅ pulled (2.5 GB) |
+| `AI_TIMEOUT` | — | **600s** — an analysis takes ~4–5 min on CPU |
+
+The CRM works fully without Ollama. Only the AI screens need it, and they degrade to a clear
+"Not Connected" state rather than breaking.
+
+> **This machine runs inference on the CPU.** The Quadro P600's driver (442.83) is too old for the
+> CUDA runtimes Ollama ships, and its Vulkan driver lacks 16-bit storage — which crashed
+> `llama-server` on every request. `OLLAMA_VULKAN=0` is set to skip the GPU. Expect roughly
+> 7 tokens/sec, and see [docs/LOCAL_AI.md](docs/LOCAL_AI.md) for how to get the GPU working.
+
+> **Important — PHP version on Windows.** `php` on this machine's `PATH` resolves to XAMPP's
+> **PHP 8.1.25**, which is too old for Laravel 13. Use `C:\php\php.exe` (8.4.23) for every command,
+> or put `C:\php` ahead of XAMPP on your `PATH`:
+>
+> ```powershell
+> $env:PATH = "C:\php;" + $env:PATH   # current shell only
+> ```
+>
+> The `sqlite3.exe` CLI is **not** required — Laravel talks to SQLite through PHP's `pdo_sqlite`.
+
+---
+
+## 3. Installation
+
+```powershell
+cd "d:\Jay Prajapati\3D surgical\Shvar\sales-copilot"
+$env:PATH = "C:\php;" + $env:PATH
+
+# PHP dependencies
+php C:\ProgramData\ComposerSetup\bin\composer.phar install
+
+# JavaScript dependencies
+npm install
+```
+
+## 4. Environment setup
+
+`.env` is created by the installer. If you are starting from a fresh clone:
+
+```powershell
+Copy-Item .env.example .env
+php artisan key:generate
+```
+
+The settings that matter:
+
+```dotenv
+APP_NAME="Shvar AI Copilot"     # rename the app here — it flows to the UI, page titles and sidebar
+APP_URL=http://localhost:8000
+DB_CONNECTION=sqlite         # database/database.sqlite
+VITE_APP_NAME="${APP_NAME}"  # used in browser tab titles
+```
+
+**Renaming the app:** change `APP_NAME` in `.env`, then `php artisan config:clear` and
+`npm run build`. Nothing hard-codes the name.
+
+## 5. Database setup
+
+SQLite needs no server. Create the file and the schema:
+
+```powershell
+php artisan migrate
+```
+
+If `database/database.sqlite` does not exist, create it first:
+
+```powershell
+New-Item -ItemType File database\database.sqlite
+```
+
+To rebuild from scratch at any time (**destroys all data**):
+
+```powershell
+php artisan migrate:fresh --seed
+```
+
+## 6. Running Laravel
+
+```powershell
+$env:PATH = "C:\php;" + $env:PATH
+php artisan serve
+```
+
+→ <http://127.0.0.1:8000>
+
+## 7. Running Vue
+
+In a **second terminal**, for hot module reload while developing:
+
+```powershell
+npm run dev
+```
+
+For everyday use you do not need the dev server — build the assets once and `php artisan serve`
+alone is enough:
+
+```powershell
+npm run build
+```
+
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Vite dev server with HMR |
+| `npm run build` | Production bundle into `public/build` |
+| `npm run type-check` | `vue-tsc` over every `.vue` / `.ts` file |
+
+## 8. How to seed the database
+
+```powershell
+# Your seven products and services (the default seed)
+php artisan db:seed
+
+# Optional: demo companies, contacts and leads to click around in
+php artisan db:seed --class=SampleDataSeeder
+```
+
+`DatabaseSeeder` loads **only the product portfolio** — companies, contacts and leads are your
+real data and should come from manual entry or CSV import, not fixtures. `ProductSeeder` uses
+`updateOrCreate` keyed on product name, so re-running it refreshes the catalogue without creating
+duplicates.
+
+`SampleDataSeeder` is opt-in and invents seven companies using `.example` domains (reserved by
+RFC 2606, so they can never resolve). Remove it all with `php artisan migrate:fresh --seed`.
+
+### CSV import
+
+`/import` creates a company, a contact and a lead per row, in three steps: choose a file →
+review the parsed preview → commit. Nothing is written until you confirm.
+
+- Recognised headers (order irrelevant, case and separators ignored — `Company Name`,
+  `company_name` and `COMPANYNAME` all match): Company Name, Website, Country, State, City,
+  Contact First Name, Contact Last Name, Job Title, Department, Email, Phone, LinkedIn, Industry,
+  Company Type, Lead Source, Lead Status, Priority, Notes
+- Unrecognised columns are listed and skipped, not treated as an error
+- Each row needs at least a company name **or** an email
+- Blank Lead Status defaults to `New`; blank Priority to `Medium`
+- **Duplicate detection** compares normalised company names (`Acme Medical, Inc.` matches
+  `acme medical inc`) and contact emails, against both the database and earlier rows in the same
+  file. Duplicates are skipped unless you opt in, in which case the existing company/contact is
+  reused and only a new lead is added
+- Invalid rows are always skipped, with a per-row reason
+- Limits: 10 MB, 5000 rows
+- A blank template is downloadable from the page
+
+---
+
+## 9. Local AI setup
+
+The CRM needs none of this. The AI screens need all of it.
+
+### 1. Install Ollama
+
+Download from **[ollama.com](https://ollama.com)** and install. On Windows it then runs in the
+background (system tray) whenever launched.
+
+```powershell
+ollama --version
+```
+
+### 2. Start Ollama
+
+Launch it from the Start menu if it is not already running. Confirm it is listening:
+
+```powershell
+curl http://localhost:11434/api/version
+```
+
+### 3. Install a compatible local model
+
+Nothing is downloaded automatically — model files are gigabytes, so that stays your decision.
+
+```powershell
+ollama pull qwen3:8b      # a reasonable ~8B starting point
+# or
+ollama pull llama3
+ollama pull phi3:mini     # smaller and faster, less capable
+
+ollama list               # what you now have
+```
+
+Pick a model that follows instructions and produces clean JSON — see
+[docs/LOCAL_AI.md §5](docs/LOCAL_AI.md) for why those two properties matter more than benchmarks
+here.
+
+### 4. Configure `OLLAMA_URL`
+
+```dotenv
+OLLAMA_URL=http://localhost:11434
+```
+
+**This is server configuration only.** It is not editable from the browser, and only local hosts
+(`localhost`, `127.0.0.1`, `::1`) are accepted — a remote address is refused before any request is
+sent. That is deliberate: it is what stops a typo forwarding your CRM data to a third party.
+
+### 5. Configure `OLLAMA_MODEL`
+
+```dotenv
+OLLAMA_MODEL=qwen3:8b
+```
+
+Set it to a model you actually pulled. The app checks whether it is installed and says so plainly if
+not — it does not assume. You can also change the active model from the UI later, which overrides
+this default.
+
+After editing `.env`:
+
+```powershell
+php artisan config:clear
+```
+
+### 6. Start Laravel
+
+```powershell
+$env:PATH = "C:\php;" + $env:PATH
+php artisan serve
+```
+
+### 7. Open Shvar AI Copilot
+
+<http://127.0.0.1:8000>
+
+### 8. Go to Settings → AI
+
+Sidebar → **Settings**. You should see:
+
+```
+AI Provider       Ollama
+Ollama URL        http://localhost:11434   (read-only)
+Configured Model  qwen3:8b
+
+Connection        ● Connected
+Model             ● Installed
+```
+
+If either light is red, the page states the reason and the fix.
+
+### 9. Test the connection
+
+Press **Test AI Connection**. It performs a real, minimal round trip — so a green result means the
+model actually replied, not merely that the port is open:
+
+```
+Connection successful. Model qwen3:8b responded in 1.82s.
+```
+
+The first request is slower because the model has to load into RAM.
+
+### Then try the Playground
+
+**Settings → AI Playground** — enter a prompt, press **Run Local AI**, and you get the response,
+execution time, model used, and token counts. Tick **Structured output (JSON)** to test constrained
+JSON generation.
+
+Every request lands in **Settings → AI Logs** with the full prompt and response, stored locally.
+
+### AI environment reference
+
+| Variable | Default | Editable in UI |
+| --- | --- | --- |
+| `AI_PROVIDER` | `ollama` | No |
+| `OLLAMA_URL` | `http://localhost:11434` | **No — by design** |
+| `OLLAMA_MODEL` | `qwen3:8b` | Yes |
+| `AI_TEMPERATURE` | `0.7` | Yes |
+| `AI_TIMEOUT` | `300` (seconds) | Yes |
+| `AI_MAX_TOKENS` | unset (model default) | Yes |
+| `AI_PROBE_TIMEOUT` | `5` (seconds) | No |
+| `AI_MAX_PROMPT_CHARS` | `20000` | No |
+| `AI_LOGGING_ENABLED` | `true` | No |
+
+Full detail, data-flow diagram and troubleshooting: **[docs/LOCAL_AI.md](docs/LOCAL_AI.md)**.
+
+---
+
+## 10. Project architecture
+
+```
+Browser
+   │  Inertia (no REST layer, no CORS, no API tokens)
+Laravel 13 ──▶ Controllers ──▶ Form Requests (validation)
+   │                       ├──▶ Services (DashboardMetrics, CsvImporter)
+   │                       ├──▶ AIServiceInterface ──▶ OllamaAIService ──▶ localhost:11434 ──▶ LLM
+   │                       └──▶ Eloquent Models ──▶ SQLite
+   └──▶ API Resources ──▶ typed props ──▶ Vue 3 + TypeScript pages
+```
+
+`OllamaAIService` is the only class that knows Ollama exists; everything else depends on
+`AIServiceInterface`. That is what makes the local runtime swappable, and what makes the privacy
+property auditable — there is exactly one place an outbound call could originate.
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full picture and
+[`docs/LOCAL_AI.md`](docs/LOCAL_AI.md) for the AI data flow.
+
+```
+app/
+  Contracts/Ai/            ProductMatcher — declared, NOT implemented (Phase 3)
+  Enums/                   LeadStatus, Priority, RecommendationType, ActivityType, LeadSource,
+                           AiRequestType, AiRequestStatus
+  Http/Controllers/        thin; one per module
+  Http/Controllers/Settings/  AiSettingsController, AiPlaygroundController, AiLogController
+  Http/Requests/           all validation
+  Http/Resources/          the exact shape sent to Vue
+  Models/                  Eloquent + relationships; AiRequest, AiSetting
+  Models/Concerns/         HasActivities (polymorphic timeline + cleanup on delete)
+  Providers/               AiServiceProvider — the ONE place AIServiceInterface is bound
+  Services/                DashboardMetrics, CsvImporter
+  Services/AI/             AIServiceInterface, OllamaAIService, AiResult, AiStatus,
+                           AiSettings, AiRequestLogger, StructuredResponseParser,
+                           LocalEndpointGuard, PromptTemplate, PromptLibrary
+  Services/AI/Exceptions/  one per failure mode, each with a user-safe message
+config/ai.php              provider, endpoint, defaults, limits, allowed_hosts
+database/
+  migrations/              8 tables (6 domain + ai_requests + ai_settings)
+  seeders/                 ProductSeeder (default), SampleDataSeeder (opt-in)
+  factories/               for tests
+resources/js/
+  Layouts/AppLayout.vue    sidebar + header + toasts
+  Pages/                   one directory per module
+  Pages/Settings/          Ai.vue, AiPlayground.vue, AiLogs.vue
+  Components/              DataTable, Modal, ConfirmDialog, ToastHub, EmptyState, FilterBar,
+                           Pagination, Badge, StatCard, FormField, DetailList, ActivityTimeline
+  Components/Ai/           LocalAiNotice, StatusDot, SettingsTabs
+  Components/Forms/        Company/Contact/Lead/Product form modals
+  types/                   models.ts, ai.ts, ui.ts
+  routes.ts                typed URL builders — no Ziggy dependency
+tests/Feature/             176 tests (87 Phase 1 + 89 Phase 2)
+```
+
+### Database structure
+
+| Table | Purpose | Key relationships |
+| --- | --- | --- |
+| `companies` | organisations | → many contacts, many leads |
+| `contacts` | people | → belongs to company (nullable), many leads |
+| `leads` | opportunities | → belongs to company + contact (both nullable) |
+| `products` | your portfolio | → many leads via `lead_product_matches` |
+| `lead_product_matches` | which products fit a lead | lead ↔ product, unique per pair |
+| `activities` | timeline entries | polymorphic to lead / company / contact |
+| `ai_requests` | local AI request log | standalone; never transmitted |
+| `ai_settings` | locally saved AI settings | key/value; endpoint deliberately excluded |
+
+`lead_product_matches` already carries `recommendation_type` and `confidence_score`. Phase 1 and 2
+only ever write `Manual` with a null score; the Phase 3 AI matcher fills those in **without a
+migration**.
+
+`ai_settings` is key/value so Phase 3 can add settings without a migration. It holds only `model`,
+`temperature`, `timeout`, `max_tokens` and `system_prompt` — the endpoint is **not** a permitted key,
+which is what prevents the browser from repointing AI traffic.
+
+Deleting a company or contact uses `nullOnDelete` — its leads survive, detached. Deleting a lead
+cascades to its product matches, and the `HasActivities` trait removes its timeline (a polymorphic
+relation cannot carry a database foreign key, so this is done in PHP).
+
+Statuses and priorities are stored as plain strings, not database enums: SQLite has none, and
+strings port to PostgreSQL unchanged. The PHP enums are what enforce the values.
+
+### Portability to PostgreSQL
+
+Nothing is SQLite-specific — no raw SQLite SQL, no `PRAGMA`, all schema via migrations, all
+queries via Eloquent. Switching later is a `.env` change plus `php artisan migrate`:
+
+```dotenv
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_DATABASE=sales_copilot
+```
+
+The one thing to revisit is the `like` in the search scopes — case-insensitive in SQLite,
+case-sensitive in PostgreSQL, where it should become `ilike`.
+
+---
+
+## 11. What is built
+
+**Fully implemented**
+
+- **Dashboard** — 8 live count cards, a scaled pipeline visual across 10 stages, priority
+  breakdown, recently-updated leads. Every figure is a real query; an empty database shows zeros
+  and a first-run empty state, never invented statistics
+- **Companies** — full CRUD, search, filter by country/industry/type, detail page with contacts,
+  leads, associated products, notes and activity timeline
+- **Contacts** — full CRUD, search across name/email/title/company, filter by company/department/
+  country, detail page with company, leads, notes and timeline
+- **Leads** — full CRUD, search by company/contact/email, filters for status/priority/country/
+  company/source, one-click status moves, manual product matching, activity timeline
+- **Product Portfolio** — all seven products pre-seeded, card grid, category and active filters,
+  detail page, fully editable
+- **CSV import** — preview, validation, duplicate detection, per-row error reporting, template
+  download
+
+**Phase 2 — local AI layer**
+
+- **Settings → AI** — live connection and model status, read-only endpoint, model picker fed by
+  Ollama's own list, temperature / timeout / max-tokens, editable system prompt, log summary,
+  environment panel, and a **Test AI Connection** button that does a real round trip
+- **Settings → AI Playground** — prompt editor with per-run model/temperature/max-tokens, a JSON
+  mode, response + parsed JSON, execution time, token counts, and example prompts
+- **Settings → AI Logs** — every request with status, model and duration; click through for the full
+  prompt and response; filter by status/type/model; search; delete one or clear all
+- **`AIServiceInterface` → `OllamaAIService`** — `generate()`, `generateStructured()`,
+  `isAvailable()`, `getModels()`, `hasModel()`, `status()`, `ping()`
+- **Structured output** — Ollama's `format` constrains generation; `StructuredResponseParser`
+  recovers from code fences and surrounding commentary using brace-balanced scanning, validates
+  required keys, and fails loudly rather than returning a guess
+- **Prompt architecture** — `PromptTemplate` (immutable, `{{ placeholder }}` substitution) and
+  `PromptLibrary` (the base system prompt, locally overridable). No prompt is built in a controller
+- **Local request log** — `ai_requests`, written for successes *and* failures
+- **Security** — `LocalEndpointGuard` blocks any non-local endpoint before a byte is sent; the
+  endpoint is not user-writable; prompt and response sizes are capped; every failure mode has a
+  typed exception with a user-safe message
+
+**Phase 3 — AI product recommendation**
+
+- **AI Sales Intelligence on the lead page** — **Analyze Lead** reads the stored company, contact
+  and lead record, matches it against the active portfolio, and returns a company reading, a primary
+  recommendation, secondary ones, products to avoid, missing information and a next action
+- **Evidence, not assertions** — each recommendation carries quotes from the stored record that
+  justify it, so a claim can be checked against the data it came from
+- **Confidence calibration** — a model's score is capped at what the record can actually support; the
+  original is kept and the UI says when it was lowered
+- **Planning modules** — a recommendation may name a capability inside a product (e.g. *Knee
+  Planning*), validated against that product's own `key_features`; an invented module is dropped
+- **Human review** — every AI recommendation is stored `Suggested`; Accept/Reject are the only ways
+  that changes, and accepting records an activity on the timeline
+- **Full history** — re-running adds an analysis rather than replacing one; past runs stay readable
+- **Manual override** — hand-picking a product still works exactly as before, and is never blocked
+  by AI output
+- **`AiProductMatcher`** — implements the Phase 1 `ProductMatcher` contract, depending only on
+  `AIServiceInterface`
+- **`RecommendationValidator`** — drops invented product ids, recovers right-name/wrong-id, rejects
+  invalid modules, coerces malformed confidence, and surfaces what it filtered
+
+**Placeholders** (navigation present, scope stated on the page, no AI behind them)
+
+- Email Drafts · Follow-ups · Knowledge Base
+
+**Still declared but NOT implemented** (Phase 4)
+
+- `AiRequestType::EmailGeneration` / `FollowUpGeneration` — declared, marked "Phase 4" in the UI,
+  never generated. A test asserts this
+- No email drafting, sending, mailbox integration, scraping or RAG exists anywhere in the codebase
+
+### Test results
+
+```
+php artisan test        →  237 passed, 1893 assertions
+npm run type-check      →  clean
+npm run build           →  clean
+```
+
+| Suite | Covers |
+| --- | --- |
+| `ApplicationSmokeTest` | every page renders empty and populated; CRM pages send zero HTTP; every AI request stays on localhost; no cloud AI hostname in source; ProductMatcher still unbound |
+| `Ai/OllamaServiceTest` | binding, availability, model discovery, bare-name tag matching, status snapshots, request shape, and every failure mode (refused, timeout, 404, 500, non-JSON, empty, oversized) |
+| `Ai/StructuredOutputTest` | clean JSON, `format` forwarding, schema forwarding, required-key enforcement, fence stripping, commentary extraction, braces inside strings, escaped quotes, nesting, rejection of arrays/scalars |
+| `Ai/AiLoggingTest` | success and failure logging, per-status mapping, execution time, structured flag, storage cap, logging disabled, survival of a log write failure |
+| `Ai/AiSettingsTest` | config fallback, persistence across requests, validation, clamping, system-prompt override/reset, and the endpoint boundary (config-only, unwritable, guard accept/reject, zero bytes sent to a remote endpoint) |
+| `Ai/AiPagesTest` | all three screens with Ollama up and down, connection test success/failure/missing-model, playground runs, structured runs, validation, friendly errors, log list/detail/filter/delete |
+| `Ai/ProductRecommendationTest` | analysis shape, primary/secondary typing, everything starts awaiting review, lead untouched, prompt contents, inactive products and private sales notes excluded, logging against the lead, history accumulation, and every failure mode |
+| `Ai/RecommendationValidationTest` | invented product ids, wrong-id/right-name recovery, duplicates, invalid modules, confidence coercion and clamping, ordering, primary fallback, and confidence calibration |
+| `Ai/LeadAnalysisPagesTest` | analyse over HTTP, empty result as a valid outcome, friendly errors, accept/reject/archive, cross-lead guards, history listing and detail, manual override |
+| `DashboardTest` | zeros on empty DB, real counts, pipeline scaling, ordering |
+| `CompanyTest` | CRUD, search, filters, relation counts, `nullOnDelete`, name normalisation |
+| `ContactTest` | CRUD, search, validation, lead survival on delete |
+| `LeadTest` | CRUD, filters, status-change timeline entries, manual product matching, cross-lead guards |
+| `ProductTest` | seeder correctness + idempotence, filters, list-field splitting, cascade |
+| `CsvImportTest` | header matching, defaults, invalid rows, duplicates, BOM, blank lines, template |
+
+Ollama does **not** need to be running for the suite to pass — every Ollama response is faked.
+
+Also verified manually over HTTP against a running server: all CRM pages plus every detail and
+filtered view returned 200, and create/update/delete/attach/activity requests succeeded through the
+real CSRF and Inertia middleware stack (422 on invalid input, 404 on cross-record access).
+
+For Phase 2, because Ollama is not installed on this machine, the real HTTP path was additionally
+driven against a **local stub that speaks Ollama's API** (`/api/version`, `/api/tags`,
+`/api/generate`). That is a stub, not Ollama — but it exercises the genuine transport, parser,
+logger and UI rather than mocks. Verified through the browser flow: status probe, connection test
+("Model qwen3:8b responded in 0.24s"), plain and structured runs, fence recovery, and the
+model-missing / unparseable-JSON / empty-completion / bad-model-override / empty-prompt failure
+paths — each producing its correct user-safe message and its correct log status.
+
+### Known limitations
+
+1. **No authentication.** Anyone with access to your machine and the running server can use it.
+   Intentional for a single-user local app; `php artisan serve` binds to `127.0.0.1` only.
+2. **`assigned_to` is free text.** There are no user accounts to link to.
+3. **Activity timeline is partly manual.** You can log Note / Call / Meeting; status changes are
+   recorded automatically. Email and Follow-up entries are Phase 3.
+4. **Product matching is entirely manual**, by design — the AI matcher is Phase 3.
+5. **CSV import is one-shape.** One row = one company + one contact + one lead. Importing only
+   companies, or several contacts per company in one file, needs repeated company names (handled
+   correctly — the company is created once).
+6. **CSV import re-parses the file on commit** rather than trusting the preview. Correct, but it
+   means the file must still be selected in the browser.
+7. **Search uses `like`**, so it is case-insensitive on SQLite but would need `ilike` on PostgreSQL.
+8. **No pagination on Product Portfolio.** A portfolio of a few dozen is fine; thousands would need it.
+9. **Deleting a product is destructive** to its lead matches. Marking it inactive is usually right,
+   and the confirmation dialog says so.
+10. **No soft deletes and no audit trail.** Deletions are permanent.
+11. **`database/database.sqlite` is not backed up.** Copy the file to back it up.
+
+Phase 2 specifically:
+
+12. **Ollama is not installed on this machine.** The AI screens render a clear "Not Connected" state
+    until you install it and pull a model. Everything else works regardless.
+13. **No live verification against a real model.** The AI path was verified end to end against a
+    local stub of Ollama's API, and exhaustively with mocked HTTP. Response *quality* — whether your
+    chosen model follows the no-invented-facts instruction, and how reliably it produces JSON — can
+    only be judged once you point it at a real model.
+14. **No streaming.** Requests use `"stream": false`, so a long response arrives all at once with a
+    spinner in the meantime. The service is shaped so a streaming method can be added without
+    changing callers; it was not built, per the Phase 2 scope.
+15. **Requests are synchronous.** A slow local model blocks that browser request until it finishes or
+    the timeout fires. No queue worker is involved.
+16. **The AI log grows unbounded.** Stored prompt/response text is capped per row, but the row count
+    is not. Clear it from Settings → AI Logs when you want to.
+17. **Only `general` requests exist.** Nothing in the CRM calls the AI yet — no lead, company or
+    product data is sent to the model anywhere in Phase 2. That begins in Phase 3.
+18. **The system prompt is a base, not a finished sales prompt.** It is deliberately generic and
+    defensive; the specialised prompts belong to Phase 3.
+
+---
+
+## 12. Phase 4 planned
+
+Not started. Nothing below exists in this codebase.
+
+Phase 2 built the AI plumbing; Phase 3 pointed it at the product catalogue. Phase 4 is where the AI
+starts producing customer-facing artefacts — which raises the stakes, because a draft email that
+asserts something untrue can leave the building.
+
+| # | Feature | Reads | Writes | Schema change |
+| --- | --- | --- | --- | --- |
+| 1 | **Email generation** | lead + company + **accepted** recommendations | new `email_drafts` table | yes |
+| 2 | **Follow-up generation** | lead + prior activity + email history | `activities` (`Follow-up` type exists) | none |
+| 3 | **Company analysis** | company profile | a `company_analyses` row | probably |
+| 4 | **Local RAG / Knowledge Base** | uploaded documents | `documents` + a local vector store | yes |
+| 5 | **Mailbox integration** | drafts | send log | yes |
+
+### Recommended Phase 4 architecture
+
+**Start with email drafting from an accepted recommendation.** Phase 3 already produces exactly the
+inputs a good email needs — a primary product, a written reason, quoted evidence and a sales angle —
+and the *accepted* status means a human already agreed with the premise. Drafting from an accepted
+recommendation rather than from the lead directly is the difference between a grounded email and a
+guess.
+
+Concretely:
+
+- **New `email_drafts` table**, referencing `lead_id` and the `lead_product_matches` row it was built
+  from. Keep every draft, like analyses — never overwrite.
+- **A `Suggested → Approved → Sent` lifecycle**, mirroring `RecommendationStatus`. Nothing is
+  sendable without an explicit approval, and sending should be a separate deliberate step from
+  drafting.
+- **`PromptLibrary::emailGeneration()`** with its own system prompt, and `AiRequestType::EmailGeneration`
+  (already declared). No prompt in a controller.
+- **Reuse `generateStructured()`** with a schema of `{subject, body, tone, talking_points}` rather
+  than free text, so the subject line is a real field and the body can be validated for length.
+- **Extend the no-invented-facts rule to product claims.** Phase 3 guards against inventing facts
+  about the *company*; an email also asserts things about *your products*. The generated body should
+  be checkable against the product record, and anything about regulatory clearance should be
+  refused unless it is in the database verbatim.
+
+**Then follow-ups**, which need email history to exist first. `ActivityType::FollowUp` and
+`Email` are already declared, so those entries need no migration.
+
+**Defer RAG until there is a reason.** It is the largest piece by far, and the portfolio currently
+fits in a prompt. It becomes worthwhile when you have real documents — spec sheets, clinical papers —
+that the model should quote from.
+
+### Carried forward from Phases 2 and 3
+
+- **Performance is the practical constraint, not capability.** A Phase 3 analysis takes ~4-5 minutes
+  on CPU. Email drafting will be similar. Before building Phase 4, either get the GPU working (see
+  [docs/LOCAL_AI.md](docs/LOCAL_AI.md)) or plan for the queue — Laravel's `database` driver is
+  already configured, and a job that takes minutes belongs in a worker, not a browser request.
+- **Streaming becomes genuinely worth adding** once a human is watching an email being written.
+  `OllamaAIService` was shaped for it: all completions funnel through one method.
+- **Small models under-fill large schemas.** Phase 3 needed an explicit "every field must be filled"
+  instruction to stop qwen3:4b leaving `reason` and `sales_angle` blank. Expect the same, and prefer
+  a compact schema over an exhaustive one.
+- **Human review is not optional.** Every generated artefact needs approval before it leaves the
+  machine. That principle held through Phases 1-3 and matters most in Phase 4.
+
+Every step stays local. No cloud AI provider may ever be bound to `AIServiceInterface`.

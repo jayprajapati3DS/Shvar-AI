@@ -1,0 +1,101 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers;
+
+use App\Http\Requests\StoreCompanyRequest;
+use App\Http\Resources\CompanyResource;
+use App\Http\Resources\ProductResource;
+use App\Models\Company;
+use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class CompanyController extends Controller
+{
+    public function index(Request $request): Response
+    {
+        $filters = $request->only(['search', 'country', 'industry', 'company_type']);
+
+        $companies = Company::query()
+            ->withCount(['contacts', 'leads'])
+            ->search($filters['search'] ?? null)
+            ->when($filters['country'] ?? null, fn ($q, $v) => $q->where('country', $v))
+            ->when($filters['industry'] ?? null, fn ($q, $v) => $q->where('industry', $v))
+            ->when($filters['company_type'] ?? null, fn ($q, $v) => $q->where('company_type', $v))
+            ->orderBy('name')
+            ->paginate(15)
+            ->withQueryString();
+
+        return Inertia::render('Companies/Index', [
+            'companies' => CompanyResource::collection($companies),
+            'filters' => $filters,
+            'filterOptions' => [
+                'countries' => $this->distinct('country'),
+                'industries' => $this->distinct('industry'),
+                'companyTypes' => $this->distinct('company_type'),
+            ],
+        ]);
+    }
+
+    public function show(Company $company): Response
+    {
+        $company->load([
+            'contacts' => fn ($q) => $q->orderBy('first_name'),
+            'leads.contact:id,first_name,last_name',
+            'leads.company:id,name',
+            'activities',
+        ]);
+
+        return Inertia::render('Companies/Show', [
+            'company' => new CompanyResource($company),
+            // Products reached through this company's leads.
+            'products' => ProductResource::collection($company->associatedProducts()),
+        ]);
+    }
+
+    public function store(StoreCompanyRequest $request): RedirectResponse
+    {
+        $company = Company::create($request->validated());
+
+        return to_route('companies.show', $company)
+            ->with('success', "Company \"{$company->name}\" created.");
+    }
+
+    public function update(StoreCompanyRequest $request, Company $company): RedirectResponse
+    {
+        $company->update($request->validated());
+
+        return back()->with('success', "Company \"{$company->name}\" updated.");
+    }
+
+    public function destroy(Company $company): RedirectResponse
+    {
+        $name = $company->name;
+
+        // Contacts and leads survive with a null company_id (nullOnDelete)
+        // rather than disappearing with the company.
+        $company->delete();
+
+        return to_route('companies.index')
+            ->with('success', "Company \"{$name}\" deleted. Its contacts and leads were kept.");
+    }
+
+    /**
+     * Distinct non-empty values of a column, for the filter dropdowns.
+     *
+     * @return list<string>
+     */
+    private function distinct(string $column): array
+    {
+        return Company::query()
+            ->whereNotNull($column)
+            ->where($column, '!=', '')
+            ->distinct()
+            ->orderBy($column)
+            ->pluck($column)
+            ->all();
+    }
+}
