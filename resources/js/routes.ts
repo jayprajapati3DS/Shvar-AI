@@ -38,6 +38,12 @@ export const routes = {
         store: () => '/companies',
         update: (id: number) => `/companies/${id}`,
         destroy: (id: number) => `/companies/${id}`,
+
+        // Website research - the one feature that fetches an external page.
+        research: (id: number) => `/companies/${id}/research`,
+        researchRun: (id: number, analysisId: number) => `/companies/${id}/research/${analysisId}`,
+        applyResearch: (id: number, analysisId: number) =>
+            `/companies/${id}/research/${analysisId}/apply`,
     },
 
     contacts: {

@@ -2,6 +2,7 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import ActivityTimeline from '@/Components/ActivityTimeline.vue';
+import CompanyResearchPanel from '@/Components/Ai/CompanyResearchPanel.vue';
 import Badge from '@/Components/Badge.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import DetailList from '@/Components/DetailList.vue';
@@ -9,12 +10,18 @@ import EmptyState from '@/Components/EmptyState.vue';
 import CompanyFormModal from '@/Components/Forms/CompanyFormModal.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import { routes } from '@/routes';
+import type { CompanyAnalysis } from '@/types/ai';
 import type { Company, Product } from '@/types/models';
 import type { DetailItem } from '@/types/ui';
 
-const { company, products } = defineProps<{
+const { company, products, analyses, latestAnalysis, research } = defineProps<{
     company: { data: Company };
     products: { data: Product[] };
+
+    // Website research.
+    analyses: { data: CompanyAnalysis[] };
+    latestAnalysis: { data: CompanyAnalysis } | null;
+    research: { enabled: boolean; fields: string[] };
 }>();
 
 const showForm = ref(false);
@@ -76,6 +83,15 @@ function destroy() {
                     <DetailList :items="details" />
                 </div>
             </section>
+
+            <!-- Website research -->
+            <CompanyResearchPanel
+                :company-id="company.data.id"
+                :website="company.data.website"
+                :analysis="latestAnalysis"
+                :history="analyses"
+                :enabled="research.enabled"
+            />
 
             <!-- Contacts -->
             <section class="card">

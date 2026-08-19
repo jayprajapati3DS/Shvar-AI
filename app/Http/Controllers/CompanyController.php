@@ -5,16 +5,25 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCompanyRequest;
+use App\Http\Resources\CompanyAnalysisResource;
 use App\Http\Resources\CompanyResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Company;
-use Illuminate\Http\Request;
+use App\Services\AI\Research\CompanyResearchSchema;
+use App\Services\AI\Research\CompanyResearcher;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class CompanyController extends Controller
 {
+    public function __construct(
+        // Only used to tell the page whether research is switched on, so the
+        // button can explain itself rather than failing on click.
+        private readonly CompanyResearcher $researcher,
+    ) {}
+
     public function index(Request $request): Response
     {
         $filters = $request->only(['search', 'country', 'industry', 'company_type']);
@@ -49,10 +58,24 @@ class CompanyController extends Controller
             'activities',
         ]);
 
+        // Summaries plus the newest run in full - the same shape as the lead
+        // page, so a company researched a dozen times does not bloat this page.
+        $analyses = $company->analyses()->limit(20)->get();
+
         return Inertia::render('Companies/Show', [
             'company' => new CompanyResource($company),
             // Products reached through this company's leads.
             'products' => ProductResource::collection($company->associatedProducts()),
+
+            // Website research.
+            'analyses' => CompanyAnalysisResource::collection($analyses),
+            'latestAnalysis' => $analyses->first()
+                ? new CompanyAnalysisResource($analyses->first())
+                : null,
+            'research' => [
+                'enabled' => $this->researcher->enabled(),
+                'fields' => CompanyResearchSchema::FIELDS,
+            ],
         ]);
     }
 

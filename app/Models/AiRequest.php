@@ -22,6 +22,7 @@ class AiRequest extends Model
         'model',
         'request_type',
         'lead_id',
+        'company_id',
         'status',
         'prompt',
         'response',
@@ -57,6 +58,16 @@ class AiRequest extends Model
     public function lead(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Lead::class);
+    }
+
+    /**
+     * The company this request concerned, when it concerned one.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<Company, $this>
+     */
+    public function company(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Company::class);
     }
 
     /** @param Builder<self> $query */

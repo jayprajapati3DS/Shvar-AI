@@ -99,6 +99,7 @@ To be precise about what that claim covers:
 | The AI request log (`ai_requests`) | No — written to your local SQLite file only |
 | Your settings (model, temperature, timeout) | No — local database |
 | Usage statistics, telemetry, crash reports | None are collected. No such code exists |
+| A company website you ask it to research | **Yes, by design** — an HTTP GET to that URL, carrying no CRM data. See [COMPANY_RESEARCH.md](COMPANY_RESEARCH.md). Disable with `RESEARCH_FETCH_ENABLED=false` |
 
 Requests to `http://localhost:11434` do not traverse a network interface that leaves the machine —
 they go over the loopback interface.

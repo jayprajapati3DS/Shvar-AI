@@ -42,12 +42,14 @@ class AiRequestLogger
         ?int $responseTokens = null,
         ?float $temperature = null,
         ?int $leadId = null,
+        ?int $companyId = null,
     ): ?int {
         return $this->write([
             'provider' => $provider,
             'model' => $model,
             'request_type' => $type,
             'lead_id' => $leadId,
+            'company_id' => $companyId,
             'status' => AiRequestStatus::Success,
             'prompt' => $this->cap($prompt),
             'response' => $this->cap($response),
@@ -78,12 +80,14 @@ class AiRequestLogger
         ?string $template = null,
         ?float $temperature = null,
         ?int $leadId = null,
+        ?int $companyId = null,
     ): ?int {
         return $this->write([
             'provider' => $provider,
             'model' => $model,
             'request_type' => $type,
             'lead_id' => $leadId,
+            'company_id' => $companyId,
             'status' => $exception instanceof AiException
                 ? $exception->status()
                 : AiRequestStatus::Failed,

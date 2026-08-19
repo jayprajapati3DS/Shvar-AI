@@ -220,3 +220,55 @@ export interface LeadAnalysis {
     created_at: string | null;
     created_for_humans: string | null;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Company website research                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One fact extracted from a company website.
+ *
+ * `evidence` is a quote already verified against the fetched page - a claim the
+ * page did not make never reaches the frontend.
+ */
+export interface CompanyResearchFinding {
+    field: string;
+    label: string;
+    value: string;
+    evidence: string;
+    confidence: number;
+    confidence_percent: number;
+    is_list: boolean;
+    /** Already written to the company record. */
+    applied: boolean;
+}
+
+/** One website-research run. Mirrors App\Http\Resources\CompanyAnalysisResource. */
+export interface CompanyAnalysis {
+    id: number;
+    company_id: number;
+
+    requested_url: string;
+    fetched_urls: string[];
+
+    provider: string;
+    model: string;
+
+    findings: CompanyResearchFinding[];
+    not_found: { field: string; label: string }[];
+    warnings: string[];
+    page_summary: string | null;
+
+    applied_fields: string[];
+    has_unapplied: boolean;
+
+    fetch_time_ms: number | null;
+    execution_time_ms: number | null;
+    seconds: number | null;
+    source_chars: number | null;
+    ai_request_id: number | null;
+
+    reviewed_at: string | null;
+    created_at: string | null;
+    created_for_humans: string | null;
+}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\CompanyController;
+use App\Http\Controllers\CompanyResearchController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImportController;
@@ -44,6 +45,22 @@ Route::post('leads/{lead}/products', [LeadProductMatchController::class, 'store'
     ->name('leads.products.store');
 Route::delete('leads/{lead}/products/{match}', [LeadProductMatchController::class, 'destroy'])
     ->name('leads.products.destroy');
+
+// ---- Company website research --------------------------------------------
+//
+// The ONE feature that makes an outbound request: it fetches the company
+// website you typed so the model reads real text instead of recalling from
+// memory. PublicUrlGuard blocks private and loopback addresses at every
+// redirect hop. Findings never touch the company record until `apply`.
+
+Route::post('companies/{company}/research', [CompanyResearchController::class, 'store'])
+    ->name('companies.research');
+Route::get('companies/{company}/research/{analysis}', [CompanyResearchController::class, 'show'])
+    ->name('companies.research.show');
+Route::post('companies/{company}/research/{analysis}/apply', [CompanyResearchController::class, 'apply'])
+    ->name('companies.research.apply');
+Route::delete('companies/{company}/research/{analysis}', [CompanyResearchController::class, 'destroy'])
+    ->name('companies.research.destroy');
 
 // ---- Phase 3: AI Sales Intelligence --------------------------------------
 //

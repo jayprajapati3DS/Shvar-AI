@@ -59,11 +59,16 @@ Everything runs on your machine.
 - No cloud database, no cloud AI, no API keys, no analytics, no telemetry
 - No third-party fonts, scripts or CDNs — the default Laravel scaffold's Bunny Fonts
   dependency was removed and replaced with a system font stack
-- The only network requests the app makes are to Ollama on loopback
+- AI requests go only to Ollama on loopback
+- **One exception, added deliberately:** *Research from website* fetches the company URL you type,
+  so the model reads real text instead of inventing facts. It sends only that HTTP request — no CRM
+  data, no prompts. Disable with `RESEARCH_FETCH_ENABLED=false`. See
+  [docs/COMPANY_RESEARCH.md](docs/COMPANY_RESEARCH.md)
 - Served over `localhost` only
 
 The accurate claim, rather than an absolute one: *AI inference is configured to run locally through
-Ollama, and the application does not intentionally send AI requests to external cloud services.*
+Ollama, and the application does not intentionally send AI requests to external cloud services. The
+only outbound request it makes is fetching a company website you explicitly ask it to read.*
 [docs/LOCAL_AI.md §4](docs/LOCAL_AI.md) sets out exactly what that covers and what it does not.
 
 ---

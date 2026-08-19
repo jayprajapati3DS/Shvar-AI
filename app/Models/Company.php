@@ -44,6 +44,19 @@ class Company extends Model
     }
 
     /**
+     * Website-research runs against this company, newest first.
+     *
+     * Kept in full: a re-run adds a row rather than replacing one, so what the
+     * site said last quarter is still readable after a redesign.
+     *
+     * @return HasMany<CompanyAnalysis, $this>
+     */
+    public function analyses(): HasMany
+    {
+        return $this->hasMany(CompanyAnalysis::class)->latestFirst();
+    }
+
+    /**
      * Products attached to any of this company's leads — the "associated
      * products" block on the company detail page.
      *

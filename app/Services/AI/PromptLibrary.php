@@ -206,6 +206,90 @@ class PromptLibrary
     }
 
     /**
+     * System prompt for reading a company website.
+     *
+     * The failure mode here is different from product recommendation. There the
+     * risk is forcing a match; here it is the model answering from memory
+     * instead of from the page. Verified on qwen3:4b: asked about a company that
+     * does not exist, it invented an industry, a description and three products
+     * without hesitation.
+     *
+     * So the rules below are about SOURCE, not judgement: every field must come
+     * from the supplied text, and every field must quote the sentence it came
+     * from. CompanyResearchValidator then checks that quote is really in the
+     * page, which makes the rule enforceable rather than advisory.
+     */
+    public const COMPANY_RESEARCH_SYSTEM_PROMPT = <<<'PROMPT'
+        You extract company information from webpage text for a medical technology sales professional.
+
+        You are reading a page. You are not recalling anything.
+
+        Rules:
+
+        - Use ONLY the supplied page text. You have no other knowledge of this company.
+        - If you recognise the company, ignore what you think you know. It is not evidence and it may be wrong.
+        - Every finding must include "evidence": a short VERBATIM quote from the supplied text that states it.
+          Copy the words exactly. Do not paraphrase, summarise or reconstruct the quote.
+        - If the page does not state something, put that field in "not_found". Never guess it.
+        - Returning few findings is correct when the page says little. An empty findings list is a valid answer.
+        - Do not infer a country or city from a language, a domain suffix or a phone number.
+        - Do not state regulatory status, certification or clearance unless the page says so in those words.
+        - Do not describe products the page does not name.
+
+        Confidence reflects how explicitly the page states the fact:
+
+        - 0.90-1.00  The page states it directly and unambiguously.
+        - 0.70-0.89  The page states it clearly, in different words.
+        - 0.40-0.69  Reasonably implied by the page, but not stated.
+        - Below 0.40 Do not report it at all.
+        PROMPT;
+
+    /**
+     * Build the company-research prompt.
+     *
+     * The page text is rendered by HtmlTextExtractor from a real fetch - no
+     * company fact is written into this class.
+     */
+    public function companyResearch(string $companyName, string $websiteUrl, string $pageText): PromptTemplate
+    {
+        return new PromptTemplate(
+            name: 'company_research',
+            template: <<<'PROMPT'
+                Read the webpage text below and extract what it says about this company.
+
+                COMPANY NAME (as entered by the user): {{ company_name }}
+                WEBSITE (as entered by the user): {{ website }}
+
+                === WEBPAGE TEXT ===
+
+                {{ page_text }}
+
+                === END OF WEBPAGE TEXT ===
+
+                Extract only these fields, and only where the text supports them:
+
+                - industry             what sector they operate in
+                - company_type         what kind of organisation (manufacturer, hospital, university, software vendor, ...)
+                - description          2-3 sentences on what they do, drawn from the text
+                - specialties          clinical or technical areas they work in
+                - products_services    what they actually sell or provide
+                - country, state, city where they are based, ONLY if the text says so
+
+                For each finding give: field, value, a verbatim evidence quote from the text, and confidence.
+
+                List any of those fields the text does not establish under "not_found".
+
+                Return ONLY the JSON object. No commentary, no code fence.
+                PROMPT,
+            system: self::COMPANY_RESEARCH_SYSTEM_PROMPT,
+        )->with([
+            'company_name' => $companyName,
+            'website' => $websiteUrl,
+            'page_text' => $pageText,
+        ]);
+    }
+
+    /**
      * A structured-output probe, used by the Playground's JSON mode and by tests.
      */
     public function structuredProbe(): PromptTemplate

@@ -248,6 +248,7 @@ class OllamaAIService implements AIServiceInterface
         // Optional: which lead this request is about, for the local log. Only
         // the recommendation flow sets it; Playground runs leave it null.
         $leadId = isset($options['lead_id']) ? (int) $options['lead_id'] : null;
+        $companyId = isset($options['company_id']) ? (int) $options['company_id'] : null;
 
         if ($structured) {
             // Belt and braces: `format` constrains generation, and the
@@ -300,6 +301,7 @@ class OllamaAIService implements AIServiceInterface
                 responseTokens: $this->intOrNull($payload['eval_count'] ?? null),
                 temperature: $temperature,
                 leadId: $leadId,
+                companyId: $companyId,
             );
 
             return new AiResult(
@@ -327,6 +329,7 @@ class OllamaAIService implements AIServiceInterface
                 template: $template?->name,
                 temperature: $temperature,
                 leadId: $leadId,
+                companyId: $companyId,
             );
 
             throw $e;
