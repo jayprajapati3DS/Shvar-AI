@@ -54,6 +54,16 @@ class EmailGenerationResource extends JsonResource
                     'confidence' => $this->recommendation->confidencePercent(),
                 ]),
 
+            // Every product this email pitches, primary first.
+            'products' => $this->whenLoaded('recommendations', fn () => $this->recommendations
+                ->map(fn ($m) => [
+                    'id' => $m->product?->id,
+                    'name' => $m->product?->name,
+                    'is_primary' => (bool) $m->pivot->is_primary,
+                ])
+                ->values()
+                ->all()),
+
             'drafts' => EmailDraftResource::collection($this->whenLoaded('drafts')),
 
             'drafts_count' => $this->whenCounted('drafts'),

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import LearningCard from '@/Components/Email/LearningCard.vue';
 import SmtpSettingsCard from '@/Components/Email/SmtpSettingsCard.vue';
 import FormField from '@/Components/FormField.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import { routes } from '@/routes';
 import type {
+    LearningProfile,
     RecipientAllowlist,
     SelectOption,
     SendingMode,
@@ -36,7 +38,22 @@ const { settings, options, preview, sending, smtp, allowlist } = defineProps<{
     sending: SendingMode;
     smtp: SmtpSettings;
     allowlist: RecipientAllowlist;
+    learning: LearningProfile;
 }>();
+
+/**
+ * Toggling learning saves immediately.
+ *
+ * It is a switch, not a form field - burying it behind "Save settings" would
+ * mean flicking it and wondering why nothing happened.
+ */
+function toggleLearning(enabled: boolean) {
+    router.put(
+        routes.settings.email.update(),
+        { learning_enabled: enabled },
+        { preserveScroll: true },
+    );
+}
 
 /** True when EMAIL_DRIVER is 'smtp' - approved emails really go out. */
 const sendingIsReal = computed(() => !sending.simulated);
@@ -216,6 +233,9 @@ function submit() {
                 <span v-if="form.recentlySuccessful" class="text-sm text-emerald-600">Saved.</span>
             </div>
         </form>
+
+        <!-- ------------------------------------------------ learning -->
+        <LearningCard :learning="learning" @toggle="toggleLearning" />
 
         <!-- ------------------------------------------------ smtp -->
         <SmtpSettingsCard :smtp="smtp" :live="sendingIsReal" />

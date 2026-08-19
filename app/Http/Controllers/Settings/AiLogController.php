@@ -9,8 +9,9 @@ use App\Enums\AiRequestType;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AiRequestResource;
 use App\Models\AiRequest;
-use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -55,7 +56,7 @@ class AiLogController extends Controller
      * A separate JSON endpoint rather than shipping every prompt in the list
      * payload - a page of 20 completions would otherwise be megabytes.
      */
-    public function show(AiRequest $aiRequest): \Illuminate\Http\JsonResponse
+    public function show(AiRequest $aiRequest): JsonResponse
     {
         return response()->json([
             'request' => (new AiRequestResource($aiRequest, withDetail: true))->resolve(),

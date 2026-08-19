@@ -95,7 +95,7 @@ class EmailDraftController extends Controller
             'product',
             'recommendation',
             'versions',
-            'generation',
+            'generation.recommendations.product',
         ]);
 
         // Recomputed rather than read from the stored column: the signature or
@@ -120,6 +120,16 @@ class EmailDraftController extends Controller
                 'missing_information' => $draft->generation->missing_information ?? [],
                 'warnings' => $draft->generation->warnings ?? [],
                 'created_at' => $draft->generation->created_at?->toIso8601String(),
+
+                // Every product this email pitches, primary first.
+                'products' => $draft->generation->recommendations
+                    ->map(fn ($m) => [
+                        'name' => $m->product?->name,
+                        'is_primary' => (bool) $m->pivot->is_primary,
+                    ])
+                    ->filter(fn (array $p) => $p['name'] !== null)
+                    ->values()
+                    ->all(),
             ],
             'sending' => [
                 'simulated' => $this->mailer->isSimulated(),

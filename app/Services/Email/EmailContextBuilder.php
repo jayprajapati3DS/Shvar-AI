@@ -31,15 +31,17 @@ class EmailContextBuilder
     /**
      * The full prompt context for one email generation.
      *
-     * @param  LeadProductMatch  $recommendation  The accepted Phase 3 recommendation
-     *                                            this email is written from.
+     * @param  iterable<LeadProductMatch>|LeadProductMatch  $recommendations
+     *                                                                        The accepted Phase 3 recommendations this email is written from,
+     *                                                                        PRIMARY FIRST. A single one is accepted for convenience.
      */
-    public function render(Lead $lead, LeadProductMatch $recommendation): string
+    public function render(Lead $lead, iterable|LeadProductMatch $recommendations): string
     {
         $lead->loadMissing(['company', 'contact']);
-        $recommendation->loadMissing(['product', 'analysis']);
 
-        return implode("\n", [
+        $set = $this->normalise($recommendations);
+
+        $blocks = [
             $this->senderBlock(),
             '',
             $this->contactBlock($lead),
@@ -48,9 +50,80 @@ class EmailContextBuilder
             '',
             $this->leadBlock($lead),
             '',
-            $this->productBlock($recommendation),
+        ];
+
+        foreach ($set as $index => $recommendation) {
+            $blocks[] = $this->productBlock($recommendation, $index, count($set));
+            $blocks[] = '';
+            $blocks[] = $this->recommendationBlock($recommendation, $index);
+            $blocks[] = '';
+        }
+
+        if (count($set) > 1) {
+            $blocks[] = $this->multiProductGuidance($set);
+        }
+
+        return trim(implode("\n", $blocks));
+    }
+
+    /**
+     * Coerce the input to an ordered list.
+     *
+     * @param  iterable<LeadProductMatch>|LeadProductMatch  $recommendations
+     * @return list<LeadProductMatch>
+     */
+    private function normalise(iterable|LeadProductMatch $recommendations): array
+    {
+        $set = $recommendations instanceof LeadProductMatch
+            ? [$recommendations]
+            : array_values(iterator_to_array(
+                is_array($recommendations) ? new \ArrayIterator($recommendations) : $recommendations
+            ));
+
+        foreach ($set as $recommendation) {
+            $recommendation->loadMissing(['product', 'analysis']);
+        }
+
+        return $set;
+    }
+
+    /**
+     * How to handle several products at once.
+     *
+     * Emitted only when there IS more than one, because a model told "lead with
+     * the primary" when there is only one product starts explaining which
+     * product it chose. The instruction here is restraint: the risk of a
+     * multi-product email is that it becomes a catalogue, and a catalogue gets
+     * deleted.
+     *
+     * @param  list<LeadProductMatch>  $set
+     */
+    private function multiProductGuidance(array $set): string
+    {
+        $names = [];
+
+        foreach ($set as $index => $recommendation) {
+            $names[] = sprintf(
+                '  %d. %s%s',
+                $index + 1,
+                $recommendation->product?->name ?? 'Unknown product',
+                $index === 0 ? '  <- LEAD WITH THIS ONE' : '',
+            );
+        }
+
+        return implode("\n", [
+            '=== HOW TO HANDLE THESE '.count($set).' PRODUCTS ===',
             '',
-            $this->recommendationBlock($recommendation),
+            'In priority order:',
+            ...$names,
+            '',
+            'Build the email around product 1. It is the reason you are writing.',
+            'Bring the others in ONLY where the company data gives a specific reason to, and give',
+            'each of them at most one sentence. If the data does not support mentioning one, leave',
+            'it out entirely - a shorter email that is clearly about something is far better than a',
+            'complete list of what we sell.',
+            'Do not write a bulleted product list. Do not describe every capability of every product.',
+            'The recipient should finish the email knowing what ONE thing you want to talk about.',
         ]);
     }
 
@@ -127,12 +200,21 @@ class EmailContextBuilder
      * of the brief: the products table is the source of truth, and anything the
      * model "knows" about a product from pretraining is not evidence.
      */
-    private function productBlock(LeadProductMatch $recommendation): string
+    private function productBlock(LeadProductMatch $recommendation, int $index = 0, int $total = 1): string
     {
         $product = $recommendation->product;
 
+        $heading = $total === 1
+            ? '=== THE PRODUCT I AM WRITING ABOUT ==='
+            : sprintf(
+                '=== PRODUCT %d OF %d%s ===',
+                $index + 1,
+                $total,
+                $index === 0 ? ' - THE PRIMARY, LEAD WITH THIS' : ' - SECONDARY',
+            );
+
         return implode("\n", [
-            '=== THE PRODUCT I AM WRITING ABOUT ===',
+            $heading,
             '(This is the complete and only description of this product you may use.',
             ' Do not add capabilities, customers, certifications or claims that are not written here.)',
             '',
@@ -149,12 +231,15 @@ class EmailContextBuilder
         ]);
     }
 
-    private function recommendationBlock(LeadProductMatch $recommendation): string
+    private function recommendationBlock(LeadProductMatch $recommendation, int $index = 0): string
     {
         $evidence = $recommendation->evidence ?? [];
 
         $lines = [
-            '=== THE APPROVED SALES DIRECTION (from my earlier analysis) ===',
+            sprintf(
+                '=== THE APPROVED SALES DIRECTION FOR %s (from my earlier analysis) ===',
+                mb_strtoupper($recommendation->product?->name ?? 'THIS PRODUCT'),
+            ),
             'Why this product is relevant to them: '.$this->value($recommendation->reason),
             'Sales angle to take: '.$this->value($recommendation->sales_angle),
             'Suggested use case: '.$this->value($recommendation->suggested_use_case),
@@ -183,10 +268,16 @@ class EmailContextBuilder
      *
      * @return list<string>
      */
-    public function gaps(Lead $lead, LeadProductMatch $recommendation): array
+    public function gaps(Lead $lead, iterable|LeadProductMatch $recommendations): array
     {
         $lead->loadMissing(['company', 'contact']);
-        $recommendation->loadMissing('product');
+
+        $set = $this->normalise($recommendations);
+        $recommendation = $set[0] ?? null;
+
+        if ($recommendation === null) {
+            return [];
+        }
 
         $checks = [
             'Contact first name' => $lead->contact?->first_name,
@@ -207,9 +298,9 @@ class EmailContextBuilder
      * Distinct from the hard requirements the controller enforces: this is the
      * "additional information may improve personalization" nudge, not a block.
      */
-    public function isThin(Lead $lead, LeadProductMatch $recommendation): bool
+    public function isThin(Lead $lead, iterable|LeadProductMatch $recommendations): bool
     {
-        return count($this->gaps($lead, $recommendation)) >= 3;
+        return count($this->gaps($lead, $recommendations)) >= 3;
     }
 
     private function value(?string $value): string

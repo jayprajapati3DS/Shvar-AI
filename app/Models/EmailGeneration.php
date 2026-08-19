@@ -9,6 +9,7 @@ use App\Enums\EmailTone;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -74,10 +75,51 @@ class EmailGeneration extends Model
         return $this->belongsTo(Product::class);
     }
 
-    /** The accepted Phase 3 recommendation this email was written from. */
+    /**
+     * The PRIMARY accepted recommendation - the product this email leads with.
+     *
+     * Denormalised onto the generation rather than reached through the pivot,
+     * so "what is this email mainly about" stays one column and every existing
+     * filter keeps working.
+     */
     public function recommendation(): BelongsTo
     {
         return $this->belongsTo(LeadProductMatch::class, 'lead_product_match_id');
+    }
+
+    /**
+     * Every recommendation this email was written from, primary first.
+     *
+     * An email may pitch more than one product. The order is the order the user
+     * chose, which is the order the model is told to weigh them in.
+     *
+     * @return BelongsToMany<LeadProductMatch, $this>
+     */
+    public function recommendations(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            LeadProductMatch::class,
+            'email_generation_recommendations',
+            'email_generation_id',
+            'lead_product_match_id',
+        )
+            ->withPivot(['is_primary', 'position'])
+            ->withTimestamps()
+            ->orderByPivot('position');
+    }
+
+    /**
+     * The products pitched, in order.
+     *
+     * @return list<string>
+     */
+    public function productNames(): array
+    {
+        return $this->recommendations
+            ->map(fn (LeadProductMatch $m) => $m->product?->name)
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /** The Phase 2 log entry holding the exact prompt and raw response. */

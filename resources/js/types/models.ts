@@ -346,6 +346,8 @@ export interface EmailGeneration {
     warnings: string[];
     /** Set when this run replaced an earlier one via Regenerate. */
     regenerated_from_id: number | null;
+    /** Every product this email pitches, primary first. */
+    products?: { name: string; is_primary: boolean }[];
     created_at: string | null;
 }
 
@@ -395,4 +397,29 @@ export interface RecipientAllowlist {
     summary: string;
     read_only: boolean;
     env_key: string;
+}
+
+/**
+ * What the application learned about how you write.
+ *
+ * Derived from approved and sent drafts only. Not training - the model's
+ * weights are untouched; this is fed back through the prompt.
+ */
+export interface LearningProfile {
+    enabled: boolean;
+    /** Approved/sent emails learned from. */
+    samples: number;
+    min_samples: number;
+    /** True when enabled AND there is enough history to say anything. */
+    active: boolean;
+    preferred_variant: string | null;
+    preferred_variant_label: string | null;
+    typical_word_count: number | null;
+    /** 0.0-1.0 - how often you rewrite the model's wording. */
+    edit_rate: number;
+    /** Sentences you consistently delete, now banned in the prompt. */
+    rejected_phrases: string[];
+    example_count: number;
+    /** The exact text added to the prompt, shown so it is not a black box. */
+    prompt_block: string | null;
 }

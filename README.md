@@ -594,6 +594,15 @@ case-sensitive in PostgreSQL, where it should become `ilike`.
   Detailed). No mail host, port or credential exists to configure, because nothing can send
 - **Email Drafts page** — list, filter by status / variant / product / company, search, open the
   editor with quality panel, preview, version history and approval
+- **One email, up to three products** — pick which to lead with and which to weave in. Each extra
+  gets at most a sentence and only where the company data supports it; the model is told to drop one
+  rather than pad the email with it. Three is a cap, because past that an email stops being about
+  anything and becomes a list of what you sell
+- **It learns from what you approve** — which variant you pick, how long your emails really are, and
+  the sentences you keep deleting, fed back into the next prompt. Not training: the model's weights
+  are untouched and nothing leaves the machine. It ignores rejected and unreviewed drafts, refuses to
+  call a dead heat a preference, and shows you the exact text it adds so you can switch it off if it
+  concluded something silly
 
 See [docs/EMAIL_GENERATION.md](docs/EMAIL_GENERATION.md) for the full workflow, prompt architecture
 and threat model.
@@ -612,7 +621,7 @@ and threat model.
 ### Test results
 
 ```
-php artisan test        →  410 passed, 4492 assertions
+php artisan test        →  474 passed, 4761 assertions
 npm run type-check      →  clean
 npm run build           →  clean
 ```
@@ -639,7 +648,10 @@ npm run build           →  clean
 | `Email/EmailApprovalTest` | editing appends versions and never overwrites the AI original, approval sets the timestamp and logs an activity, editing revokes approval, unapproved drafts refuse to send at all three layers, simulated send writes only to the local log |
 | `Email/EmailSignatureAndQualityTest` | composed vs hand-written signature, blank-field handling, the signature being appended rather than stored, every quality check and its severity, settings whitelist and validation |
 | `Email/EmailPagesTest` | drafts list and filters, editor payload, version history, the preview carrying nothing internal, the lead page explaining why generation is blocked, no mail server exposed in settings |
-| `Email/EmailPrivacyTest` | no cloud AI hostname in source, only one `EmailServiceInterface` implementation, unimplemented drivers throw, Laravel Mail unused, no outbound call anywhere in the email layer, no OAuth or scheduling route |
+| `Email/EmailPrivacyTest` | no cloud AI hostname in source, only the two known transports, unimplemented drivers throw, Laravel Mail unused, SMTP password encrypted at rest and never sent to the browser, the allowlist, no OAuth or scheduling route |
+| `Email/SmtpSendingTest` | all three send gates (unapproved, not allowlisted, unconfigured), an allowlist refusal is not a delivery failure, domain rules, settings validation, clearing the password |
+| `Email/MultiProductEmailTest` | the full product set is recorded, the first becomes primary, order preserved, capped at three, duplicates collapsed, claims checked across all products, secondaries must also be accepted |
+| `Email/EmailStyleLearningTest` | nothing learned from too little or from the wrong drafts, a dead heat is not a preference, medians resist outliers, deleted sentences become bans, the block reaches the prompt, and the switch works |
 
 Ollama does **not** need to be running for the suite to pass — every Ollama response is faked.
 

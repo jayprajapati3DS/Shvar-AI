@@ -11,7 +11,7 @@
  * alongside the first, and the user picks.
  */
 import { Link, router, useForm } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import Badge from '@/Components/Badge.vue';
 import Modal from '@/Components/Modal.vue';
 import { routes } from '@/routes';
@@ -35,11 +35,55 @@ const { leadId, drafts, generations, acceptedProducts, status, canGenerate, bloc
 
 const showGenerate = ref(false);
 
+/** Matches EmailGenerator::MAX_PRODUCTS. Past three an email reads as a catalogue. */
+const MAX_PRODUCTS = 3;
+
 const form = useForm({
     recommendation_id: '' as string | number,
+    secondary_recommendation_ids: [] as number[],
     extra_instructions: '',
     regenerate_from: '' as string | number,
 });
+
+/** Everything except the one chosen to lead - the pool of possible extras. */
+const secondaryOptions = computed(() =>
+    acceptedProducts.filter((p) => p.id !== Number(form.recommendation_id)),
+);
+
+const selectedCount = computed(() => 1 + form.secondary_recommendation_ids.length);
+
+const atLimit = computed(() => selectedCount.value >= MAX_PRODUCTS);
+
+function toggleSecondary(id: number) {
+    const current = form.secondary_recommendation_ids;
+
+    if (current.includes(id)) {
+        form.secondary_recommendation_ids = current.filter((x) => x !== id);
+        return;
+    }
+
+    if (atLimit.value) {
+        return;
+    }
+
+    form.secondary_recommendation_ids = [...current, id];
+}
+
+/**
+ * Changing the primary drops it from the secondaries.
+ *
+ * Otherwise the same product would be both led with and mentioned again, and
+ * the generator would silently de-duplicate it - leaving the UI claiming two
+ * products and the email containing one.
+ */
+watch(
+    () => form.recommendation_id,
+    (id) => {
+        form.secondary_recommendation_ids = form.secondary_recommendation_ids.filter(
+            (x) => x !== Number(id),
+        );
+    },
+);
 
 const openDrafts = computed(() =>
     drafts.filter((d) => !['Archived', 'Rejected'].includes(d.status)),
@@ -221,7 +265,7 @@ function formatDate(value: string | null): string {
     >
         <form class="space-y-4" @submit.prevent="generate">
             <div>
-                <label for="recommendation" class="label">Product recommendation</label>
+                <label for="recommendation" class="label">Lead with</label>
                 <select id="recommendation" v-model="form.recommendation_id" class="input">
                     <option value="" disabled>Choose an accepted recommendation…</option>
                     <option v-for="item in acceptedProducts" :key="item.id" :value="item.id">
@@ -232,7 +276,61 @@ function formatDate(value: string | null): string {
                     {{ form.errors.recommendation_id }}
                 </p>
                 <p v-else class="mt-1 text-xs text-slate-500">
-                    Only accepted recommendations are offered — the email follows the direction you approved.
+                    The email is built around this one. Only accepted recommendations are offered —
+                    the email follows the direction you approved.
+                </p>
+            </div>
+
+            <!--
+                Secondary products. Capped at three total on purpose: past that
+                the email stops being about anything and becomes a list of what
+                we sell, which is the failure the whole style guide is arranged
+                against.
+            -->
+            <div v-if="secondaryOptions.length">
+                <p class="label">
+                    Also mention
+                    <span class="font-normal text-slate-400">
+                        — optional, {{ selectedCount }}/{{ MAX_PRODUCTS }} selected
+                    </span>
+                </p>
+
+                <ul class="space-y-1.5">
+                    <li v-for="item in secondaryOptions" :key="item.id">
+                        <label
+                            class="flex cursor-pointer items-start gap-2.5 text-sm"
+                            :class="
+                                !form.secondary_recommendation_ids.includes(item.id) && atLimit
+                                    ? 'cursor-not-allowed opacity-50'
+                                    : ''
+                            "
+                        >
+                            <input
+                                type="checkbox"
+                                class="checkbox mt-0.5"
+                                :checked="form.secondary_recommendation_ids.includes(item.id)"
+                                :disabled="!form.secondary_recommendation_ids.includes(item.id) && atLimit"
+                                @change="toggleSecondary(item.id)"
+                            />
+                            <span>
+                                <span class="text-slate-800">{{ item.product }}</span>
+                                <span v-if="item.sales_angle" class="block text-xs text-slate-400">
+                                    {{ item.sales_angle }}
+                                </span>
+                            </span>
+                        </label>
+                    </li>
+                </ul>
+
+                <p
+                    v-if="form.errors.secondary_recommendation_ids"
+                    class="mt-1 text-xs font-medium text-red-600"
+                >
+                    {{ form.errors.secondary_recommendation_ids }}
+                </p>
+                <p v-else class="mt-1.5 text-xs text-slate-500">
+                    Each extra gets at most a sentence, and only where the company data supports it.
+                    The model is told to drop one rather than pad the email with it.
                 </p>
             </div>
 
@@ -254,8 +352,9 @@ function formatDate(value: string | null): string {
             </div>
 
             <p class="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                Generation can take a minute or two on a local model. Three drafts are created and
-                left unsent — you review, edit and approve each one yourself.
+                Generation can take a minute or two on a local model — longer with more products.
+                Three drafts are created and left unsent — you review, edit and approve each one
+                yourself.
             </p>
         </form>
 

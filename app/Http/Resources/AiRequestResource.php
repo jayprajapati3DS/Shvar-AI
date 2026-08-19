@@ -6,6 +6,7 @@ namespace App\Http\Resources;
 
 use App\Models\AiRequest;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -25,7 +26,7 @@ class AiRequestResource extends JsonResource
     }
 
     /** Collection of summary rows, without the bulky text columns. */
-    public static function summaries(mixed $resource): \Illuminate\Http\Resources\Json\AnonymousResourceCollection
+    public static function summaries(mixed $resource): AnonymousResourceCollection
     {
         return self::collection($resource);
     }

@@ -8,6 +8,7 @@ use App\Services\Email\EmailQualityChecker;
 use App\Services\Email\EmailRenderer;
 use App\Services\Email\EmailServiceInterface;
 use App\Services\Email\EmailSettings;
+use App\Services\Email\EmailStyleProfile;
 use App\Services\Email\LocalTestEmailService;
 use App\Services\Email\RecipientAllowlist;
 use App\Services\Email\SmtpEmailService;
@@ -36,6 +37,7 @@ class EmailServiceProvider extends ServiceProvider
         $this->app->singleton(EmailSettings::class);
         $this->app->singleton(EmailRenderer::class);
         $this->app->singleton(EmailQualityChecker::class);
+        $this->app->singleton(EmailStyleProfile::class);
         $this->app->singleton(SmtpSettings::class);
         $this->app->singleton(RecipientAllowlist::class);
 

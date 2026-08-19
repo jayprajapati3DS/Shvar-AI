@@ -12,6 +12,7 @@ use App\Http\Requests\UpdateSmtpSettingsRequest;
 use App\Services\Email\EmailRenderer;
 use App\Services\Email\EmailServiceInterface;
 use App\Services\Email\EmailSettings;
+use App\Services\Email\EmailStyleProfile;
 use App\Services\Email\RecipientAllowlist;
 use App\Services\Email\SmtpEmailService;
 use App\Services\Email\SmtpSettings;
@@ -38,6 +39,7 @@ class EmailSettingsController extends Controller
         private readonly EmailServiceInterface $mailer,
         private readonly SmtpSettings $smtp,
         private readonly RecipientAllowlist $allowlist,
+        private readonly EmailStyleProfile $style,
     ) {}
 
     public function index(): Response
@@ -72,6 +74,11 @@ class EmailSettingsController extends Controller
             // remove by clicking is not much of one - it comes from .env, and
             // this page shows it rather than editing it. Same treatment as
             // OLLAMA_URL on the AI settings page.
+            // What the application has concluded about how you write, shown in
+            // full. A prompt that silently rewrites itself is how a system
+            // quietly gets worse in ways nobody can point at.
+            'learning' => $this->style->toArray(),
+
             'allowlist' => [
                 ...$this->allowlist->describe(),
                 'read_only' => true,

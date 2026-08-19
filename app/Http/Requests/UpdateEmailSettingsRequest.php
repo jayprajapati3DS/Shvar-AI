@@ -36,6 +36,9 @@ class UpdateEmailSettingsRequest extends FormRequest
 
             'tone' => ['nullable', Rule::enum(EmailTone::class)],
             'length' => ['nullable', Rule::enum(EmailLength::class)],
+
+            // Whether generations learn from the emails you approve.
+            'learning_enabled' => ['sometimes', 'boolean'],
         ];
     }
 

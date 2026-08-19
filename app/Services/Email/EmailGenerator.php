@@ -54,12 +54,29 @@ class EmailGenerator
         private readonly EmailValidator $validator,
         private readonly EmailQualityChecker $quality,
         private readonly EmailSettings $settings,
+
+        // What this user's own approved emails say about how they write.
+        // Contributes nothing until there are enough of them.
+        private readonly EmailStyleProfile $style,
     ) {}
+
+    /**
+     * The most products one email may pitch.
+     *
+     * Not arbitrary. Past three the email stops being about anything and starts
+     * being a catalogue, which is the failure the whole style guide is arranged
+     * against - and the local model's ability to keep several products straight
+     * degrades faster than its ability to write one good paragraph.
+     */
+    public const MAX_PRODUCTS = 3;
 
     /**
      * Generate one run of three variants.
      *
-     * @param  LeadProductMatch  $recommendation  The accepted Phase 3 recommendation to write from.
+     * @param  iterable<LeadProductMatch>|LeadProductMatch  $recommendations
+     *                                                                        The accepted Phase 3 recommendations to write from, PRIMARY FIRST.
+     *                                                                        The email leads with the first and mentions the rest only where the
+     *                                                                        company data supports it.
      * @param  string|null  $extraInstructions  Free-text steer for this run only.
      * @param  EmailGeneration|null  $replacing  Set when this is a "Regenerate" of an earlier run.
      *
@@ -67,22 +84,28 @@ class EmailGenerator
      */
     public function generate(
         Lead $lead,
-        LeadProductMatch $recommendation,
+        iterable|LeadProductMatch $recommendations,
         ?string $extraInstructions = null,
         ?EmailGeneration $replacing = null,
     ): EmailGeneration {
         $lead->loadMissing(['company', 'contact']);
-        $recommendation->loadMissing('product');
+
+        $set = $this->normalise($recommendations);
+
+        if ($set === []) {
+            throw new \InvalidArgumentException('An email needs at least one accepted recommendation.');
+        }
 
         $tone = $this->settings->tone();
         $length = $this->settings->length();
 
         $prompt = $this->prompts->emailGeneration(
-            $this->context->render($lead, $recommendation),
+            $this->context->render($lead, $set),
             $tone->instruction(),
             $length->instruction(),
             $this->variantBriefs(),
             $extraInstructions,
+            $this->style->promptBlock(),
         );
 
         // Any AiException propagates to the controller, which turns it into a
@@ -94,9 +117,41 @@ class EmailGenerator
             ['lead_id' => $lead->id],
         );
 
-        $validated = $this->validator->validate($result->data ?? [], $recommendation);
+        $validated = $this->validator->validate($result->data ?? [], $set);
 
-        return $this->persist($lead, $recommendation, $validated, $result, $extraInstructions, $replacing);
+        return $this->persist($lead, $set, $validated, $result, $extraInstructions, $replacing);
+    }
+
+    /**
+     * Coerce, de-duplicate and cap the recommendation set.
+     *
+     * Order is preserved because it is meaningful - the first is the primary.
+     *
+     * @param  iterable<LeadProductMatch>|LeadProductMatch  $recommendations
+     * @return list<LeadProductMatch>
+     */
+    private function normalise(iterable|LeadProductMatch $recommendations): array
+    {
+        $set = $recommendations instanceof LeadProductMatch
+            ? [$recommendations]
+            : array_values(iterator_to_array(
+                is_array($recommendations) ? new \ArrayIterator($recommendations) : $recommendations
+            ));
+
+        $seen = [];
+        $unique = [];
+
+        foreach ($set as $recommendation) {
+            if (isset($seen[$recommendation->id])) {
+                continue;
+            }
+
+            $seen[$recommendation->id] = true;
+            $recommendation->loadMissing('product');
+            $unique[] = $recommendation;
+        }
+
+        return array_slice($unique, 0, self::MAX_PRODUCTS);
     }
 
     /**
@@ -117,11 +172,12 @@ class EmailGenerator
     }
 
     /**
+     * @param  list<LeadProductMatch>  $set
      * @param  array<string, mixed>  $validated
      */
     private function persist(
         Lead $lead,
-        LeadProductMatch $recommendation,
+        array $set,
         array $validated,
         AiResult $result,
         ?string $extraInstructions,
@@ -129,17 +185,21 @@ class EmailGenerator
     ): EmailGeneration {
         return DB::transaction(function () use (
             $lead,
-            $recommendation,
+            $set,
             $validated,
             $result,
             $extraInstructions,
             $replacing,
         ): EmailGeneration {
+            // The first is the primary: the product the email leads with, the
+            // one shown in the drafts list and used by the filters.
+            $recommendation = $set[0];
+
             $missing = $validated['missing_information'];
 
             // Fall back to the computed gaps when the model says nothing useful.
             if ($missing === []) {
-                $missing = $this->context->gaps($lead, $recommendation);
+                $missing = $this->context->gaps($lead, $set);
             }
 
             $generation = EmailGeneration::create([
@@ -161,11 +221,26 @@ class EmailGenerator
                 'regenerated_from_id' => $replacing?->id,
             ]);
 
+            // The full set, primary first, so an email that pitched three
+            // products can still say which three a year from now.
+            foreach ($set as $position => $item) {
+                $generation->recommendations()->attach($item->id, [
+                    'is_primary' => $position === 0,
+                    'position' => $position,
+                ]);
+            }
+
             foreach ($validated['variants'] as $variant) {
                 $this->createDraft($generation, $lead, $recommendation, $variant, $result);
             }
 
-            return $generation->load(['drafts.product', 'drafts.contact', 'product', 'recommendation']);
+            return $generation->load([
+                'drafts.product',
+                'drafts.contact',
+                'product',
+                'recommendation',
+                'recommendations.product',
+            ]);
         });
     }
 

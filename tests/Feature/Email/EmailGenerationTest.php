@@ -279,6 +279,45 @@ class EmailGenerationTest extends TestCase
         });
     }
 
+    public function test_a_regulatory_claim_is_allowed_only_when_the_record_states_it(): void
+    {
+        // Observed on qwen3:4b against the real seed data: the model wrote "FDA
+        // 510(k) cleared", which was correct - the product record says exactly
+        // that. An absolute ban would have forced it to omit a true, material
+        // fact, so the rule carries the same caveat the Phase 3 prompt does.
+        $this->fakeAi($this->goodPayload());
+
+        $this->generate();
+
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), '/api/generate')) {
+                return true;
+            }
+
+            $system = $request->data()['system'] ?? '';
+
+            return str_contains($system, 'UNLESS that exact fact is written in the supplied product record')
+                && str_contains($system, 'do not imply it');
+        });
+    }
+
+    public function test_an_ungrounded_regulatory_claim_is_flagged(): void
+    {
+        // The product in setUp() says nothing about clearance, so a claim about
+        // it has to come from somewhere other than the record.
+        $payload = $this->goodPayload();
+        $payload['claims_used'][] = 'The platform is FDA 510(k) cleared and CE marked under MDR.';
+
+        $this->fakeAi($payload);
+
+        $generation = $this->generate();
+
+        $this->assertStringContainsString(
+            'does not appear there',
+            implode(' ', $generation->warnings ?? []),
+        );
+    }
+
     public function test_the_system_prompt_forbids_narrating_the_lead_source(): void
     {
         // lead_source = "Referral" records how the contact reached us. It does

@@ -172,6 +172,33 @@ resolve and the variant is dropped.
 
 ---
 
+## 4b. Pitching more than one product
+
+One email can be written from up to **three** accepted recommendations.
+
+- The first is the **primary**. The email is built around it, and it is what the
+  drafts list shows and the filters match — "what is this email about" always has
+  one answer.
+- The rest are woven in only where the company data gives a specific reason,
+  **at most one sentence each**. The model is told to drop one entirely rather
+  than pad the email with it.
+
+The cap is `EmailGenerator::MAX_PRODUCTS`. Past three the email stops being about
+anything and becomes a list of what you sell, which is the failure the whole
+style guide is arranged against — and the local model's ability to keep several
+products straight degrades much faster than its ability to write one good
+paragraph.
+
+Every selected product must be **accepted** on that lead, not just the primary.
+Claims are checked against all of them together, so a true sentence about the
+second product is not flagged for being absent from the first one's record.
+
+The set is stored on `email_generation_recommendations` with `is_primary` and
+`position`, so an email that pitched three products can still say which three a
+year from now.
+
+---
+
 ## 5. Structured output and validation
 
 The schema is passed to Ollama's `format` parameter, which *constrains
@@ -324,6 +351,57 @@ run is untouched.
 The lead page then offers **Keep previous** / **Use new version**. Either way the
 losing set is *archived*, not deleted — a regeneration you rejected stays
 readable, which is the point of keeping versions at all.
+
+---
+
+## 8b. Learning from what you approve
+
+**This is not training.** The model's weights are frozen, nothing here touches
+them, and nothing leaves the machine. There is no fine-tuning and no gradient.
+
+What it is: the signal you are already producing, fed back into the prompt. Every
+time you approve one variant over another, shorten a draft or rewrite an opening,
+you state a preference. That used to be thrown away and the next generation
+started from the same blank slate.
+
+`EmailStyleProfile` reads it back from drafts you **approved or sent**:
+
+| Learned | From | Needs |
+| --- | --- | --- |
+| Which variant you prefer | approval counts | a clear lead — 1.5× the runner-up |
+| Your real email length | median word count | 6 approved emails |
+| Sentences you keep deleting | `ai_body` vs `body` on edited drafts | the same cut twice |
+| Worked examples | your approved emails, edited ones first | 3 approved emails |
+
+The rejected-phrases list is the most useful part. *"Stop writing this"* is a far
+stronger instruction than any amount of style guidance, because it is specific
+and it came from you.
+
+### What it will not do
+
+- **Learn from rejected or unreviewed drafts.** A draft you rejected is not a
+  preference, and one still sitting in `Draft` is just the model's own output —
+  learning from that would be the model teaching itself its own habits.
+- **Assert a preference from a dead heat.** Telling the model to favour a style
+  you pick half the time invents a signal rather than reading one.
+- **State a word count from three samples.** A median of three is one short email
+  away from claiming you write 40-word emails, and a stated number reads as an
+  instruction. It needs six.
+- **Outrank the truth rules.** The block is placed after the company and product
+  data and says so explicitly: these are preferences about HOW to write, never
+  about what is true. A worked example containing a claim is still a claim that
+  has to come from the product record.
+
+### Seeing and switching it
+
+Settings → Email shows exactly what was concluded, including a **Show exactly
+what gets added to the prompt** button that prints the block verbatim. A prompt
+that silently rewrites itself is how a system quietly gets worse in ways nobody
+can point at — if it has learned something silly, you can read it and turn the
+whole thing off.
+
+Only the most recent 40 approved emails are considered, so it tracks how you
+write now rather than how you wrote a year ago.
 
 ---
 

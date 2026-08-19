@@ -327,7 +327,10 @@ class PromptLibrary
         - A field marked "(not recorded)" is unknown. Never guess it and never write around it as if you knew it.
         - Describe the product using ONLY the supplied product description, features and value proposition.
           Do not add capabilities, integrations, standards or certifications that are not written there.
-        - Never claim regulatory clearance, certification, approval or compliance for either party.
+        - Do not claim regulatory clearance, certification, approval or compliance for either party
+          UNLESS that exact fact is written in the supplied product record. If it is written there,
+          you may state it plainly - it is true and it matters. If it is not, do not imply it,
+          hint at it, or describe the product in words that suggest it.
         - Never invent customers, partnerships, case studies, statistics, awards or years of experience.
         - Never imply you have read their website, seen a post, met them, or been referred by anyone,
           unless the supplied notes say exactly that.
@@ -372,6 +375,8 @@ class PromptLibrary
      * @param  string  $lengthInstruction  From the user's saved EmailLength.
      * @param  string  $variantBriefs  Rendered one-line brief per variant.
      * @param  string|null  $extraInstructions  Free-text steer typed for this run.
+     * @param  string|null  $styleProfile  What EmailStyleProfile learned from the
+     *                                     emails this user has approved, or null.
      */
     public function emailGeneration(
         string $context,
@@ -379,11 +384,17 @@ class PromptLibrary
         string $lengthInstruction,
         string $variantBriefs,
         ?string $extraInstructions = null,
+        ?string $styleProfile = null,
     ): PromptTemplate {
         $extra = filled($extraInstructions)
             ? "=== ADDITIONAL INSTRUCTIONS FROM ME (follow these, but never at the expense of the truth rules) ===\n\n"
                 .trim((string) $extraInstructions)
             : '(none)';
+
+        // Rendered as its own block rather than merged into the tone
+        // instruction: it is evidence of how this person actually writes, and
+        // it has to stay distinguishable from the settings they picked.
+        $style = filled($styleProfile) ? trim((string) $styleProfile) : '(nothing learned yet)';
 
         return new PromptTemplate(
             name: 'email_generation',
@@ -402,6 +413,8 @@ class PromptLibrary
                 Write one email for each of these, all to the same person about the same product:
 
                 {{ variant_briefs }}
+
+                {{ style_profile }}
 
                 {{ extra_instructions }}
 
@@ -435,6 +448,7 @@ class PromptLibrary
             'length_instruction' => $lengthInstruction,
             'variant_briefs' => $variantBriefs,
             'extra_instructions' => $extra,
+            'style_profile' => $style,
         ]);
     }
 

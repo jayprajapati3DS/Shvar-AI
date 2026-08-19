@@ -23,6 +23,7 @@ use App\Models\Contact;
 use App\Models\EmailDraft;
 use App\Models\EmailGeneration;
 use App\Models\Lead;
+use App\Models\LeadProductMatch;
 use App\Models\Product;
 use App\Services\AI\AIServiceInterface;
 use App\Services\BulkEditor;
@@ -238,6 +239,7 @@ class LeadController extends Controller
 
         $generations = EmailGeneration::query()
             ->where('lead_id', $lead->id)
+            ->with('recommendations.product:id,name')
             ->latestFirst()
             ->limit(10)
             ->get();
@@ -276,7 +278,7 @@ class LeadController extends Controller
             'drafts' => EmailDraftResource::collection($drafts)->resolve(),
             'generations' => EmailGenerationResource::collection($generations)->resolve(),
             'acceptedProducts' => $accepted
-                ->map(fn (\App\Models\LeadProductMatch $m) => [
+                ->map(fn (LeadProductMatch $m) => [
                     'id' => $m->id,
                     'product' => $m->product?->name ?? 'Unknown product',
                     'sales_angle' => $m->sales_angle,

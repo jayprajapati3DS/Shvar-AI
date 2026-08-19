@@ -44,10 +44,22 @@ class EmailGenerationController extends Controller
      */
     public function store(GenerateEmailRequest $request, Lead $lead): RedirectResponse
     {
-        $recommendation = $this->resolveRecommendation($lead, $request->integer('recommendation_id'));
+        // The primary first, then any secondaries in the order they were chosen.
+        // Order is meaningful all the way down: the model is told to lead with
+        // the first one.
+        $set = [];
 
-        if (is_string($recommendation)) {
-            return back()->with('error', $recommendation);
+        foreach ([
+            $request->integer('recommendation_id'),
+            ...array_map(intval(...), (array) $request->input('secondary_recommendation_ids', [])),
+        ] as $id) {
+            $resolved = $this->resolveRecommendation($lead, $id);
+
+            if (is_string($resolved)) {
+                return back()->with('error', $resolved);
+            }
+
+            $set[] = $resolved;
         }
 
         if ($blocker = $this->missingEssentials($lead)) {
@@ -59,7 +71,7 @@ class EmailGenerationController extends Controller
         try {
             $generation = $this->generator->generate(
                 $lead,
-                $recommendation,
+                $set,
                 $request->input('extra_instructions'),
                 $replacing,
             );
@@ -69,10 +81,14 @@ class EmailGenerationController extends Controller
         }
 
         $count = $generation->drafts()->count();
+        $products = $generation->recommendations()->count();
 
         $message = sprintf(
-            '%d draft(s) written by %s in %ss. Nothing has been sent - review, edit and approve first.',
+            '%d draft(s) about %s, written by %s in %ss. Nothing has been sent - review, edit and approve first.',
             $count,
+            $products === 1
+                ? ($set[0]->product?->name ?? 'the selected product')
+                : $products.' products',
             $generation->model,
             number_format($generation->seconds(), 1),
         );

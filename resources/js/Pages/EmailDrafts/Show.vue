@@ -333,6 +333,15 @@ function formatDateTime(value: string | null): string {
                         <dt class="inline font-medium text-slate-600">Tone:</dt>
                         <dd class="inline"> {{ generation.tone }}, {{ generation.length }}</dd>
                     </div>
+                    <div v-if="(generation.products?.length ?? 0) > 1">
+                        <dt class="font-medium text-slate-600">Products:</dt>
+                        <dd>
+                            <span v-for="(p, i) in generation.products" :key="p.name">
+                                {{ i > 0 ? ', ' : '' }}{{ p.name
+                                }}<span v-if="p.is_primary" class="text-slate-400"> (lead)</span>
+                            </span>
+                        </dd>
+                    </div>
                     <div v-if="generation.extra_instructions">
                         <dt class="font-medium text-slate-600">Your instructions:</dt>
                         <dd class="italic">"{{ generation.extra_instructions }}"</dd>

@@ -77,6 +77,10 @@ class EmailValidator
      * Validate and clean one AI response.
      *
      * @param  array<string, mixed>  $data  Decoded model output.
+     * @param  iterable<LeadProductMatch>|LeadProductMatch  $recommendations
+     *                                                                        Everything this email was written from. Claims are checked against
+     *                                                                        all of them, because a multi-product email may legitimately make a
+     *                                                                        claim about any product it pitches.
      * @return array{
      *     variants: list<array{variant: EmailVariant, subject: string, body: string, word_count: int}>,
      *     personalization_points: list<string>,
@@ -87,7 +91,7 @@ class EmailValidator
      *
      * @throws InvalidAiResponseException when nothing usable survives.
      */
-    public function validate(array $data, LeadProductMatch $recommendation): array
+    public function validate(array $data, iterable|LeadProductMatch $recommendations): array
     {
         $warnings = [];
 
@@ -110,7 +114,7 @@ class EmailValidator
             'missing_information' => $this->strings($data['missing_information'] ?? null),
             'warnings' => [
                 ...$warnings,
-                ...$this->unsupportedClaims($claims, $recommendation),
+                ...$this->unsupportedClaims($claims, $recommendations),
             ],
         ];
     }
@@ -295,9 +299,10 @@ class EmailValidator
      * true sentence would be worse than one the user glances at and dismisses.
      *
      * @param  list<string>  $claims
+     * @param  iterable<LeadProductMatch>|LeadProductMatch  $recommendations
      * @return list<string>
      */
-    private function unsupportedClaims(array $claims, LeadProductMatch $recommendation): array
+    private function unsupportedClaims(array $claims, iterable|LeadProductMatch $recommendations): array
     {
         if ($claims === []) {
             // Not "nothing to check" - "the check did not run". A model that
@@ -311,23 +316,39 @@ class EmailValidator
             ];
         }
 
-        $recommendation->loadMissing('product');
-        $product = $recommendation->product;
+        $set = $recommendations instanceof LeadProductMatch
+            ? [$recommendations]
+            : array_values(iterator_to_array(
+                is_array($recommendations) ? new \ArrayIterator($recommendations) : $recommendations
+            ));
 
-        $source = mb_strtolower(implode(' ', array_filter([
-            $product?->name,
-            $product?->category,
-            $product?->short_description,
-            $product?->detailed_description,
-            $product?->key_features,
-            $product?->target_customer,
-            $product?->target_specialty,
-            $product?->value_proposition,
-            $recommendation->reason,
-            $recommendation->sales_angle,
-            $recommendation->suggested_use_case,
-            $recommendation->module,
-        ])));
+        // Every product the email pitches is fair game for a claim, so the
+        // haystack is all of them together. Checking against only the primary
+        // would flag a perfectly good sentence about the second product.
+        $parts = [];
+
+        foreach ($set as $recommendation) {
+            $recommendation->loadMissing('product');
+            $product = $recommendation->product;
+
+            $parts = [
+                ...$parts,
+                $product?->name,
+                $product?->category,
+                $product?->short_description,
+                $product?->detailed_description,
+                $product?->key_features,
+                $product?->target_customer,
+                $product?->target_specialty,
+                $product?->value_proposition,
+                $recommendation->reason,
+                $recommendation->sales_angle,
+                $recommendation->suggested_use_case,
+                $recommendation->module,
+            ];
+        }
+
+        $source = mb_strtolower(implode(' ', array_filter($parts)));
 
         if (trim($source) === '') {
             return ['The product record holds no description, so no product claim in this email could be checked.'];

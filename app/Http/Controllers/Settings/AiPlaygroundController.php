@@ -114,11 +114,11 @@ class AiPlaygroundController extends Controller
             ],
             [
                 'label' => 'Summarise a note',
-                'prompt' => "Summarise the following sales note in two sentences. "
+                'prompt' => 'Summarise the following sales note in two sentences. '
                     ."Do not add anything that is not stated.\n\n"
-                    ."Met the R&D lead at a device company in Minneapolis. They outsource "
-                    ."all segmentation today, roughly 40 cases a month, and want it in-house. "
-                    ."No budget confirmed yet.",
+                    .'Met the R&D lead at a device company in Minneapolis. They outsource '
+                    .'all segmentation today, roughly 40 cases a month, and want it in-house. '
+                    .'No budget confirmed yet.',
             ],
             [
                 'label' => 'Structured output test',

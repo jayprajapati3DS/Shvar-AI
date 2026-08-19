@@ -34,6 +34,7 @@ class EmailSettings
         'signature',
         'tone',
         'length',
+        'learning_enabled',
     ];
 
     /** The fields that make up the auto-composed signature block. */
@@ -96,6 +97,21 @@ class EmailSettings
     public function length(): EmailLength
     {
         return EmailLength::tryFrom((string) $this->stored('length')) ?? EmailLength::Standard;
+    }
+
+    /**
+     * Whether generations learn from the emails you approve.
+     *
+     * On by default: the signal is already there and throwing it away makes
+     * every email start from the same blank slate. EmailStyleProfile shows
+     * exactly what it concluded, so this is a switch you can make an informed
+     * decision about rather than a black box you either trust or do not.
+     */
+    public function learningEnabled(): bool
+    {
+        $stored = $this->stored('learning_enabled');
+
+        return $stored === null ? true : $stored === '1';
     }
 
     /**
@@ -191,6 +207,7 @@ class EmailSettings
                 // rather than being stored and silently breaking generation.
                 'tone' => (EmailTone::tryFrom((string) $value) ?? EmailTone::Professional)->value,
                 'length' => (EmailLength::tryFrom((string) $value) ?? EmailLength::Standard)->value,
+                'learning_enabled' => filter_var($value, FILTER_VALIDATE_BOOLEAN) ? '1' : '0',
                 default => $value === null || trim((string) $value) === '' ? null : trim((string) $value),
             };
 
@@ -226,6 +243,7 @@ class EmailSettings
 
             'tone' => $this->tone()->value,
             'length' => $this->length()->value,
+            'learning_enabled' => $this->learningEnabled(),
         ];
     }
 

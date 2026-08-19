@@ -11,6 +11,7 @@ use App\Services\CsvImporter;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * CSV import for Companies + Contacts + Leads in one pass.
@@ -65,7 +66,7 @@ class ImportController extends Controller
     /**
      * A blank CSV with the expected headers, generated locally.
      */
-    public function template(): \Symfony\Component\HttpFoundation\StreamedResponse
+    public function template(): StreamedResponse
     {
         $columns = $this->templateDefinition()['columns'];
 
@@ -103,8 +104,8 @@ class ImportController extends Controller
             'Minneapolis',
             'Designs patient-specific knee and hip instrumentation from CT imaging.',
             // Multi-value fields accept one per line, or comma/semicolon separated.
-            "Knee
-Hip",
+            'Knee
+Hip',
             'Patient-specific cutting guides, revision instrumentation',
             'Met at a trade show; evaluating in-house planning software.',
 

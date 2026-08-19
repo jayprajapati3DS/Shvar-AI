@@ -10,8 +10,8 @@ use App\Http\Resources\LeadResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
 use App\Services\BulkEditor;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 

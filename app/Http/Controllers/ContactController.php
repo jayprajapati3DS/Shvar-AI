@@ -10,8 +10,8 @@ use App\Http\Resources\ContactResource;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Services\BulkEditor;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
