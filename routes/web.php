@@ -40,6 +40,27 @@ Route::resource('contacts', ContactController::class)->except(['create', 'edit']
 Route::resource('leads', LeadController::class)->except(['create', 'edit']);
 Route::resource('products', ProductController::class)->except(['create', 'edit']);
 
+// Bulk actions on the list pages: edit the fields many records can share, or
+// delete a selection.
+//
+// Declared BEFORE nothing in particular - they sit under their own path segment
+// so they can never be mistaken for a record id by the resource routes above.
+//
+// Both are POST, including the delete. The selection is a list of ids that does
+// not fit comfortably in a query string, and every browser handles a POST body
+// consistently where DELETE-with-body is patchy.
+foreach ([
+    'companies' => CompanyController::class,
+    'contacts' => ContactController::class,
+    'leads' => LeadController::class,
+    'products' => ProductController::class,
+] as $resource => $controller) {
+    Route::post("{$resource}/bulk/update", [$controller, 'bulkUpdate'])
+        ->name("{$resource}.bulk-update");
+    Route::post("{$resource}/bulk/delete", [$controller, 'bulkDestroy'])
+        ->name("{$resource}.bulk-destroy");
+}
+
 // Manual product <-> lead matching (Phase 2 adds an AI-driven equivalent).
 Route::post('leads/{lead}/products', [LeadProductMatchController::class, 'store'])
     ->name('leads.products.store');

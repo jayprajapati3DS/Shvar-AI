@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkContactActionRequest;
 use App\Http\Requests\StoreContactRequest;
 use App\Http\Resources\ContactResource;
 use App\Models\Company;
 use App\Models\Contact;
+use App\Services\BulkEditor;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -42,6 +44,11 @@ class ContactController extends Controller
                 'departments' => $this->distinct('department'),
                 'countries' => $this->distinct('country'),
             ],
+            // The company list is data, not an enum, so it is injected here
+            // rather than hard-coded in the model definition.
+            'bulkFields' => Contact::bulkFieldsForUi([
+                'company_id' => $this->companyOptions(),
+            ]),
         ]);
     }
 
@@ -82,6 +89,30 @@ class ContactController extends Controller
 
         return to_route('contacts.index')
             ->with('success', "Contact \"{$name}\" deleted.");
+    }
+
+    public function bulkUpdate(BulkContactActionRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $changed = $editor->update(
+            Contact::class,
+            $request->ids(),
+            $request->values(),
+            $request->clear(),
+        );
+
+        return back()->with(
+            $changed > 0 ? 'success' : 'error',
+            $changed > 0
+                ? "Updated {$changed} contact(s)."
+                : 'Nothing to update - no fields were changed.'
+        );
+    }
+
+    public function bulkDestroy(BulkContactActionRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $deleted = $editor->delete(Contact::class, $request->ids());
+
+        return back()->with('success', "Deleted {$deleted} contact(s).");
     }
 
     /** @return list<array{value: int, label: string}> */

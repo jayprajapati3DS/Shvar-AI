@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\BulkEditable;
 use App\Models\Concerns\HasActivities;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Company extends Model
 {
+    use BulkEditable;
     use HasActivities;
 
     /** @use HasFactory<\Database\Factories\CompanyFactory> */
@@ -68,6 +70,30 @@ class Company extends Model
             ->whereHas('leadMatches.lead', fn (Builder $q) => $q->where('company_id', $this->id))
             ->orderBy('name')
             ->get();
+    }
+
+    /**
+     * Fields worth setting across many companies at once.
+     *
+     * Classification and location - what a freshly imported batch tends to
+     * share. Name, website and description are per-company by nature.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function bulkEditableFields(): array
+    {
+        return [
+            ['key' => 'industry', 'label' => 'Industry', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:150']],
+            ['key' => 'company_type', 'label' => 'Company type', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:150']],
+            ['key' => 'country', 'label' => 'Country', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:120']],
+            ['key' => 'state', 'label' => 'State / region', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:120']],
+            ['key' => 'city', 'label' => 'City', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:120']],
+        ];
     }
 
     /** @param Builder<self> $query */

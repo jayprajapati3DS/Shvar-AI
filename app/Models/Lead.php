@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
+use App\Models\Concerns\BulkEditable;
 use App\Models\Concerns\HasActivities;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,9 +14,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Validation\Rule;
 
 class Lead extends Model
 {
+    use BulkEditable;
     use HasActivities;
 
     /** @use HasFactory<\Database\Factories\LeadFactory> */
@@ -82,6 +85,33 @@ class Lead extends Model
         return $this->belongsToMany(Product::class, 'lead_product_matches')
             ->withPivot(['id', 'recommendation_type', 'confidence_score', 'reason', 'notes'])
             ->withTimestamps();
+    }
+
+    /**
+     * Fields worth setting across many leads at once.
+     *
+     * Status and priority are the day-to-day case: qualifying a batch after a
+     * conference, or dropping a stale segment down the pipeline.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function bulkEditableFields(): array
+    {
+        return [
+            // Not nullable: a lead always has a status and a priority, so the
+            // modal offers no way to clear them.
+            ['key' => 'lead_status', 'label' => 'Lead status', 'type' => 'select',
+                'options' => LeadStatus::options(),
+                'rules' => [Rule::enum(LeadStatus::class)]],
+            ['key' => 'priority', 'label' => 'Priority', 'type' => 'select',
+                'options' => Priority::options(),
+                'rules' => [Rule::enum(Priority::class)]],
+            ['key' => 'lead_source', 'label' => 'Lead source', 'type' => 'text', 'nullable' => true,
+                'hint' => 'Free text - anything you could type on a single lead.',
+                'rules' => ['string', 'max:150']],
+            ['key' => 'assigned_to', 'label' => 'Assigned to', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:150']],
+        ];
     }
 
     /** @param Builder<self> $query */

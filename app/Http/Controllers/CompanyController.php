@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkCompanyActionRequest;
 use App\Http\Requests\StoreCompanyRequest;
 use App\Http\Resources\CompanyAnalysisResource;
 use App\Http\Resources\CompanyResource;
@@ -11,6 +12,7 @@ use App\Http\Resources\ProductResource;
 use App\Models\Company;
 use App\Services\AI\Research\CompanyResearchSchema;
 use App\Services\AI\Research\CompanyResearcher;
+use App\Services\BulkEditor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -46,6 +48,9 @@ class CompanyController extends Controller
                 'industries' => $this->distinct('industry'),
                 'companyTypes' => $this->distinct('company_type'),
             ],
+            // Drives the bulk-edit modal. Sent from the model so the form and
+            // the validation can never describe different fields.
+            'bulkFields' => Company::bulkFieldsForUi(),
         ]);
     }
 
@@ -104,6 +109,33 @@ class CompanyController extends Controller
 
         return to_route('companies.index')
             ->with('success', "Company \"{$name}\" deleted. Its contacts and leads were kept.");
+    }
+
+    public function bulkUpdate(BulkCompanyActionRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $changed = $editor->update(
+            Company::class,
+            $request->ids(),
+            $request->values(),
+            $request->clear(),
+        );
+
+        return back()->with(
+            $changed > 0 ? 'success' : 'error',
+            $changed > 0
+                ? "Updated {$changed} compan(ies)."
+                : 'Nothing to update - no fields were changed.'
+        );
+    }
+
+    public function bulkDestroy(BulkCompanyActionRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $deleted = $editor->delete(Company::class, $request->ids());
+
+        return back()->with(
+            'success',
+            "Deleted {$deleted} compan(ies). Their contacts and leads were kept."
+        );
     }
 
     /**

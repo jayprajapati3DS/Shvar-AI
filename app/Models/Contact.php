@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\BulkEditable;
 use App\Models\Concerns\HasActivities;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Contact extends Model
 {
+    use BulkEditable;
     use HasActivities;
 
     /** @use HasFactory<\Database\Factories\ContactFactory> */
@@ -51,6 +53,32 @@ class Contact extends Model
     protected function fullName(): Attribute
     {
         return Attribute::get(fn (): string => trim($this->first_name.' '.$this->last_name));
+    }
+
+    /**
+     * Fields worth setting across many contacts at once.
+     *
+     * Company is here because reassigning a batch after a merger or a bad
+     * import is the common repair.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function bulkEditableFields(): array
+    {
+        return [
+            // Options are empty here on purpose: the company list is data, not a
+            // fixed enum, so ContactController fills it per request. The rule
+            // below is what actually protects the write.
+            ['key' => 'company_id', 'label' => 'Company', 'type' => 'select', 'nullable' => true,
+                'options' => [], 'hint' => 'Moves the selected contacts to this company.',
+                'rules' => ['integer', 'exists:companies,id']],
+            ['key' => 'department', 'label' => 'Department', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:150']],
+            ['key' => 'country', 'label' => 'Country', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:120']],
+            ['key' => 'city', 'label' => 'City', 'type' => 'text', 'nullable' => true,
+                'rules' => ['string', 'max:120']],
+        ];
     }
 
     /** @param Builder<self> $query */

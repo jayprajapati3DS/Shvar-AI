@@ -228,6 +228,36 @@ review the parsed preview → commit. Nothing is written until you confirm.
 - Limits: 10 MB, 5000 rows
 - A blank template is downloadable from the page
 
+### Bulk actions
+
+Every list page (Leads, Companies, Contacts, Products) has a checkbox per row. Select some and a
+bar appears at the bottom of the screen offering **Edit fields** and **Delete**.
+
+- Selection survives paging and filtering. Select five leads on page 1, page forward, select three
+  more, and act on all eight — the bar says how many are off-screen. The header checkbox is
+  "select all on this page", not "select everything".
+- **Edit fields** only offers fields that make sense set identically across many records. Names,
+  emails, descriptions and notes are per-record and are deliberately absent.
+
+  | Page | Editable in bulk |
+  | --- | --- |
+  | Leads | Lead status, Priority, Lead source, Assigned to |
+  | Companies | Industry, Company type, Country, State, City |
+  | Contacts | Company, Department, Country, City |
+  | Products | Category, Active |
+
+- Each field has three explicit states: **Leave unchanged** (the default), **Set to…** and
+  **Clear**. Blank never means "empty this column" — an untouched field is left exactly as it is on
+  every record. Only fields that are optional on the single-record form offer Clear at all, so
+  Lead status and Priority cannot be emptied.
+- A bulk status change writes the same activity-timeline entry per lead that changing it one at a
+  time would, so the history stays honest.
+- Deletes state their consequences before you confirm: deleting companies keeps their contacts and
+  leads (detached), deleting leads takes their product opportunities and AI analysis history with
+  them, and deleting products removes every lead opportunity referencing them.
+- Limit: 500 records per action. The server re-validates every field against the model's own
+  definition, so nothing the browser sends can write a column that is not on the list above.
+
 ---
 
 ## 9. Local AI setup

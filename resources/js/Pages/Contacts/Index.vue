@@ -2,6 +2,8 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Badge from '@/Components/Badge.vue';
+import BulkActionBar from '@/Components/Bulk/BulkActionBar.vue';
+import BulkEditModal from '@/Components/Bulk/BulkEditModal.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import DataTable from '@/Components/DataTable.vue';
 import EmptyState from '@/Components/EmptyState.vue';
@@ -9,11 +11,12 @@ import FilterBar from '@/Components/FilterBar.vue';
 import ContactFormModal from '@/Components/Forms/ContactFormModal.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { useBulkSelection } from '@/composables/useBulkSelection';
 import { routes } from '@/routes';
 import type { Contact, Paginated, SelectOption } from '@/types/models';
-import type { Column } from '@/types/ui';
+import type { BulkField, Column } from '@/types/ui';
 
-const { contacts, filters, filterOptions } = defineProps<{
+const { contacts, filters, filterOptions, bulkFields } = defineProps<{
     contacts: Paginated<Contact>;
     filters: Record<string, string | undefined>;
     filterOptions: {
@@ -21,6 +24,7 @@ const { contacts, filters, filterOptions } = defineProps<{
         departments: string[];
         countries: string[];
     };
+    bulkFields: BulkField[];
 }>();
 
 const columns: Column[] = [
@@ -38,6 +42,30 @@ const showForm = ref(false);
 const editing = ref<Contact | null>(null);
 const deleting = ref<Contact | null>(null);
 const processing = ref(false);
+
+// Bulk selection. Reads the rows through a getter so it re-derives after every
+// Inertia visit rather than holding a stale array.
+const selection = useBulkSelection(() => contacts.data);
+const showBulkEdit = ref(false);
+const confirmingBulkDelete = ref(false);
+
+function bulkDelete() {
+    const ids = selection.selectedIds.value;
+    processing.value = true;
+
+    router.post(
+        routes.contacts.bulkDestroy(),
+        { ids },
+        {
+            preserveScroll: true,
+            onSuccess: () => selection.forget(ids),
+            onFinish: () => {
+                processing.value = false;
+                confirmingBulkDelete.value = false;
+            },
+        },
+    );
+}
 
 function create() {
     editing.value = null;
@@ -107,7 +135,18 @@ function latestLead(contact: Contact) {
         </EmptyState>
 
         <template v-else>
-            <DataTable :columns="columns" :rows="contacts.data" :row-key="(row) => row.id">
+            <DataTable
+                :columns="columns"
+                :rows="contacts.data"
+                :row-key="(row) => row.id"
+                selectable
+                select-label="contact"
+                :is-selected="selection.isSelected"
+                :all-selected="selection.allVisibleSelected.value"
+                :some-selected="selection.someVisibleSelected.value"
+                @toggle="selection.toggle"
+                @toggle-all="selection.toggleAllVisible"
+            >
                 <template #row="{ row }">
                     <td class="td">
                         <Link :href="routes.contacts.show(row.id)" class="font-medium text-slate-900 hover:text-indigo-600">
@@ -184,6 +223,36 @@ function latestLead(contact: Contact) {
         :contact="editing"
         :companies="filterOptions.companies"
         @close="showForm = false"
+    />
+
+    <BulkActionBar
+        :count="selection.count.value"
+        :off-page-count="selection.offPageCount.value"
+        label="contact"
+        :processing="processing"
+        @edit="showBulkEdit = true"
+        @delete="confirmingBulkDelete = true"
+        @clear="selection.clear"
+    />
+
+    <BulkEditModal
+        :open="showBulkEdit"
+        :fields="bulkFields"
+        :ids="selection.selectedIds.value"
+        label="contact"
+        :url="routes.contacts.bulkUpdate()"
+        @close="showBulkEdit = false"
+        @saved="showBulkEdit = false"
+    />
+
+    <ConfirmDialog
+        :open="confirmingBulkDelete"
+        :title="`Delete ${selection.count.value} contact(s)?`"
+        message="The contacts are removed. Any leads referencing them are kept, but will no longer have a contact. This cannot be undone."
+        :confirm-label="`Delete ${selection.count.value}`"
+        :processing="processing"
+        @cancel="confirmingBulkDelete = false"
+        @confirm="bulkDelete"
     />
 
     <ConfirmDialog

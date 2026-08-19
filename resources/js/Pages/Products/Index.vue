@@ -1,22 +1,35 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Badge from '@/Components/Badge.vue';
+import BulkActionBar from '@/Components/Bulk/BulkActionBar.vue';
+import BulkEditModal from '@/Components/Bulk/BulkEditModal.vue';
+import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FilterBar from '@/Components/FilterBar.vue';
 import ProductFormModal from '@/Components/Forms/ProductFormModal.vue';
 import PageHeader from '@/Components/PageHeader.vue';
+import { useBulkSelection } from '@/composables/useBulkSelection';
 import { routes } from '@/routes';
 import type { Product } from '@/types/models';
+import type { BulkField } from '@/types/ui';
 
-const { products, filters, filterOptions } = defineProps<{
+const { products, filters, filterOptions, bulkFields } = defineProps<{
     products: { data: Product[] };
     filters: Record<string, string | undefined>;
     filterOptions: { categories: string[] };
+    bulkFields: BulkField[];
 }>();
 
 const showForm = ref(false);
 const editing = ref<Product | null>(null);
+const processing = ref(false);
+
+// The portfolio is a card grid rather than a table, so the checkbox sits in
+// each card header and "select all" gets its own control above the grid.
+const selection = useBulkSelection(() => products.data);
+const showBulkEdit = ref(false);
+const confirmingBulkDelete = ref(false);
 
 function create() {
     editing.value = null;
@@ -26,6 +39,24 @@ function create() {
 function edit(product: Product) {
     editing.value = product;
     showForm.value = true;
+}
+
+function bulkDelete() {
+    const ids = selection.selectedIds.value;
+    processing.value = true;
+
+    router.post(
+        routes.products.bulkDestroy(),
+        { ids },
+        {
+            preserveScroll: true,
+            onSuccess: () => selection.forget(ids),
+            onFinish: () => {
+                processing.value = false;
+                confirmingBulkDelete.value = false;
+            },
+        },
+    );
 }
 </script>
 
@@ -73,21 +104,46 @@ function edit(product: Product) {
         <button type="button" class="btn-primary" @click="create">+ New product</button>
     </EmptyState>
 
-    <div v-else class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+    <div v-else>
+        <label class="mb-3 inline-flex cursor-pointer items-center gap-2 text-sm text-slate-600">
+            <input
+                type="checkbox"
+                class="checkbox"
+                :checked="selection.allVisibleSelected.value"
+                :indeterminate="selection.someVisibleSelected.value"
+                @change="selection.toggleAllVisible"
+            />
+            Select all {{ products.data.length }}
+        </label>
+
+        <div class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
         <article
             v-for="product in products.data"
             :key="product.id"
             class="card flex flex-col p-5 transition-shadow hover:shadow-md"
-            :class="product.active ? '' : 'opacity-70'"
+            :class="[
+                product.active ? '' : 'opacity-70',
+                selection.isSelected(product.id) ? 'ring-2 ring-indigo-500' : '',
+            ]"
         >
             <header class="mb-3">
                 <div class="mb-1.5 flex items-start justify-between gap-2">
-                    <Link
-                        :href="routes.products.show(product.id)"
-                        class="text-base font-semibold leading-snug text-slate-900 hover:text-indigo-600"
-                    >
-                        {{ product.name }}
-                    </Link>
+                    <div class="flex items-start gap-2.5">
+                        <input
+                            type="checkbox"
+                            class="checkbox mt-1"
+                            :checked="selection.isSelected(product.id)"
+                            :aria-label="`Select ${product.name}`"
+                            @change="selection.toggle(product.id)"
+                        />
+
+                        <Link
+                            :href="routes.products.show(product.id)"
+                            class="text-base font-semibold leading-snug text-slate-900 hover:text-indigo-600"
+                        >
+                            {{ product.name }}
+                        </Link>
+                    </div>
 
                     <Badge :color="product.active ? 'emerald' : 'slate'" size="sm">
                         {{ product.active ? 'Active' : 'Inactive' }}
@@ -152,7 +208,37 @@ function edit(product: Product) {
                 </div>
             </footer>
         </article>
+        </div>
     </div>
 
     <ProductFormModal :open="showForm" :product="editing" @close="showForm = false" />
+
+    <BulkActionBar
+        :count="selection.count.value"
+        label="product"
+        :processing="processing"
+        @edit="showBulkEdit = true"
+        @delete="confirmingBulkDelete = true"
+        @clear="selection.clear"
+    />
+
+    <BulkEditModal
+        :open="showBulkEdit"
+        :fields="bulkFields"
+        :ids="selection.selectedIds.value"
+        label="product"
+        :url="routes.products.bulkUpdate()"
+        @close="showBulkEdit = false"
+        @saved="showBulkEdit = false"
+    />
+
+    <ConfirmDialog
+        :open="confirmingBulkDelete"
+        :title="`Delete ${selection.count.value} product(s)?`"
+        message="The products are removed, along with every lead opportunity that references them. Marking them inactive instead keeps the history and hides them from lead product pickers. This cannot be undone."
+        :confirm-label="`Delete ${selection.count.value}`"
+        :processing="processing"
+        @cancel="confirmingBulkDelete = false"
+        @confirm="bulkDelete"
+    />
 </template>

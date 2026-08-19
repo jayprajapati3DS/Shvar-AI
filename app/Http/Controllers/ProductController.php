@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\BulkProductActionRequest;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Resources\LeadResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Product;
+use App\Services\BulkEditor;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -43,6 +45,7 @@ class ProductController extends Controller
                     ->pluck('category')
                     ->all(),
             ],
+            'bulkFields' => Product::bulkFieldsForUi(),
         ]);
     }
 
@@ -87,5 +90,32 @@ class ProductController extends Controller
 
         return to_route('products.index')
             ->with('success', "Product \"{$name}\" deleted.");
+    }
+
+    public function bulkUpdate(BulkProductActionRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $changed = $editor->update(
+            Product::class,
+            $request->ids(),
+            $request->values(),
+            $request->clear(),
+        );
+
+        return back()->with(
+            $changed > 0 ? 'success' : 'error',
+            $changed > 0
+                ? "Updated {$changed} product(s)."
+                : 'Nothing to update - no fields were changed.'
+        );
+    }
+
+    public function bulkDestroy(BulkProductActionRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $deleted = $editor->delete(Product::class, $request->ids());
+
+        return back()->with(
+            'success',
+            "Deleted {$deleted} product(s), along with any lead opportunities using them."
+        );
     }
 }

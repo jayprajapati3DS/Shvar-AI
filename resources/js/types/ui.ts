@@ -33,3 +33,27 @@ export interface FilterDefinition {
     label: string;
     options: SelectOption[] | string[];
 }
+
+/**
+ * One editable field in the bulk-edit modal.
+ *
+ * Mirrors what a model declares in bulkEditableFields(). The server strips the
+ * validation rules before sending this, so the shape here is presentation only
+ * - every value is re-validated server-side regardless of what the modal does.
+ */
+export interface BulkField {
+    key: string;
+    label: string;
+    type: 'select' | 'text' | 'boolean';
+    /** Whether this field offers a "clear" option as well as a new value. */
+    nullable: boolean;
+    options?: SelectOption[];
+    hint?: string;
+}
+
+/** What a bulk edit sends: values to set, and fields to empty. */
+export interface BulkEditPayload {
+    ids: number[];
+    values: Record<string, string | number | boolean>;
+    clear: string[];
+}

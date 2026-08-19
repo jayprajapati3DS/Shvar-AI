@@ -2,6 +2,8 @@
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
 import Badge from '@/Components/Badge.vue';
+import BulkActionBar from '@/Components/Bulk/BulkActionBar.vue';
+import BulkEditModal from '@/Components/Bulk/BulkEditModal.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import DataTable from '@/Components/DataTable.vue';
 import EmptyState from '@/Components/EmptyState.vue';
@@ -9,11 +11,12 @@ import FilterBar from '@/Components/FilterBar.vue';
 import LeadFormModal from '@/Components/Forms/LeadFormModal.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { useBulkSelection } from '@/composables/useBulkSelection';
 import { routes } from '@/routes';
 import type { Contact, Lead, Paginated, SelectOption } from '@/types/models';
-import type { Column } from '@/types/ui';
+import type { BulkField, Column } from '@/types/ui';
 
-const { leads, filters, filterOptions, options } = defineProps<{
+const { leads, filters, filterOptions, options, bulkFields } = defineProps<{
     leads: Paginated<Lead>;
     filters: Record<string, string | undefined>;
     filterOptions: {
@@ -30,6 +33,7 @@ const { leads, filters, filterOptions, options } = defineProps<{
         companies: SelectOption[];
         contacts: { data: Contact[] };
     };
+    bulkFields: BulkField[];
 }>();
 
 const columns: Column[] = [
@@ -48,6 +52,30 @@ const showForm = ref(false);
 const editing = ref<Lead | null>(null);
 const deleting = ref<Lead | null>(null);
 const processing = ref(false);
+
+// Bulk selection. Reads the rows through a getter so it re-derives after every
+// Inertia visit rather than holding a stale array.
+const selection = useBulkSelection(() => leads.data);
+const showBulkEdit = ref(false);
+const confirmingBulkDelete = ref(false);
+
+function bulkDelete() {
+    const ids = selection.selectedIds.value;
+    processing.value = true;
+
+    router.post(
+        routes.leads.bulkDestroy(),
+        { ids },
+        {
+            preserveScroll: true,
+            onSuccess: () => selection.forget(ids),
+            onFinish: () => {
+                processing.value = false;
+                confirmingBulkDelete.value = false;
+            },
+        },
+    );
+}
 
 function create() {
     editing.value = null;
@@ -114,7 +142,18 @@ function confirmDelete() {
         </EmptyState>
 
         <template v-else>
-            <DataTable :columns="columns" :rows="leads.data" :row-key="(row) => row.id">
+            <DataTable
+                :columns="columns"
+                :rows="leads.data"
+                :row-key="(row) => row.id"
+                selectable
+                select-label="lead"
+                :is-selected="selection.isSelected"
+                :all-selected="selection.allVisibleSelected.value"
+                :some-selected="selection.someVisibleSelected.value"
+                @toggle="selection.toggle"
+                @toggle-all="selection.toggleAllVisible"
+            >
                 <template #row="{ row }">
                     <td class="td">
                         <Link :href="routes.leads.show(row.id)" class="font-medium text-slate-900 hover:text-indigo-600">
@@ -167,6 +206,36 @@ function confirmDelete() {
     </div>
 
     <LeadFormModal :open="showForm" :lead="editing" :options="options" @close="showForm = false" />
+
+    <BulkActionBar
+        :count="selection.count.value"
+        :off-page-count="selection.offPageCount.value"
+        label="lead"
+        :processing="processing"
+        @edit="showBulkEdit = true"
+        @delete="confirmingBulkDelete = true"
+        @clear="selection.clear"
+    />
+
+    <BulkEditModal
+        :open="showBulkEdit"
+        :fields="bulkFields"
+        :ids="selection.selectedIds.value"
+        label="lead"
+        :url="routes.leads.bulkUpdate()"
+        @close="showBulkEdit = false"
+        @saved="showBulkEdit = false"
+    />
+
+    <ConfirmDialog
+        :open="confirmingBulkDelete"
+        :title="`Delete ${selection.count.value} lead(s)?`"
+        message="The leads, their product opportunities, their AI analysis history and their activity timelines are removed. Companies and contacts are kept. This cannot be undone."
+        :confirm-label="`Delete ${selection.count.value}`"
+        :processing="processing"
+        @cancel="confirmingBulkDelete = false"
+        @confirm="bulkDelete"
+    />
 
     <ConfirmDialog
         :open="deleting !== null"

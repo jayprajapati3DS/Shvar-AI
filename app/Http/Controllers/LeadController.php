@@ -8,6 +8,7 @@ use App\Enums\ActivityType;
 use App\Enums\LeadSource;
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
+use App\Http\Requests\BulkLeadActionRequest;
 use App\Http\Requests\StoreLeadRequest;
 use App\Http\Resources\ContactResource;
 use App\Http\Resources\LeadAnalysisResource;
@@ -19,6 +20,7 @@ use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\Product;
 use App\Services\AI\AIServiceInterface;
+use App\Services\BulkEditor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -62,6 +64,7 @@ class LeadController extends Controller
             // The "New lead" modal lives on this page, so it needs the full
             // form payload (contacts included), not just the filter lists.
             'options' => $this->formOptions(),
+            'bulkFields' => Lead::bulkFieldsForUi(),
         ]);
     }
 
@@ -148,6 +151,55 @@ class LeadController extends Controller
         $lead->delete();
 
         return to_route('leads.index')->with('success', 'Lead deleted.');
+    }
+
+    /**
+     * Apply one set of changes to many leads.
+     *
+     * The status-change activity entry is logged per lead exactly as a single
+     * edit would - a bulk move through the pipeline should leave the same trail
+     * as doing it one at a time, or the timeline quietly lies.
+     */
+    public function bulkUpdate(BulkLeadActionRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $changed = $editor->update(
+            Lead::class,
+            $request->ids(),
+            $request->values(),
+            $request->clear(),
+            function (Lead $lead, array $attributes): void {
+                if (! array_key_exists('lead_status', $attributes)) {
+                    return;
+                }
+
+                $next = $attributes['lead_status'];
+
+                if ($lead->lead_status->value === $next) {
+                    return;
+                }
+
+                Activity::record(
+                    $lead,
+                    ActivityType::StatusChange,
+                    "Status changed to {$next}",
+                    "Previously {$lead->lead_status->value}. Changed as part of a bulk update."
+                );
+            },
+        );
+
+        return back()->with(
+            $changed > 0 ? 'success' : 'error',
+            $changed > 0
+                ? "Updated {$changed} lead(s)."
+                : 'Nothing to update - no fields were changed.'
+        );
+    }
+
+    public function bulkDestroy(BulkLeadActionRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $deleted = $editor->delete(Lead::class, $request->ids());
+
+        return back()->with('success', "Deleted {$deleted} lead(s).");
     }
 
     /**

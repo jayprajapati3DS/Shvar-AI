@@ -39,6 +39,10 @@ export const routes = {
         update: (id: number) => `/companies/${id}`,
         destroy: (id: number) => `/companies/${id}`,
 
+        // Bulk actions - both POST, since the selection is a list of ids.
+        bulkUpdate: () => '/companies/bulk/update',
+        bulkDestroy: () => '/companies/bulk/delete',
+
         // Website research - the one feature that fetches an external page.
         research: (id: number) => `/companies/${id}/research`,
         researchRun: (id: number, analysisId: number) => `/companies/${id}/research/${analysisId}`,
@@ -52,6 +56,10 @@ export const routes = {
         store: () => '/contacts',
         update: (id: number) => `/contacts/${id}`,
         destroy: (id: number) => `/contacts/${id}`,
+
+        // Bulk actions - both POST, since the selection is a list of ids.
+        bulkUpdate: () => '/contacts/bulk/update',
+        bulkDestroy: () => '/contacts/bulk/delete',
     },
 
     leads: {
@@ -60,6 +68,10 @@ export const routes = {
         store: () => '/leads',
         update: (id: number) => `/leads/${id}`,
         destroy: (id: number) => `/leads/${id}`,
+
+        // Bulk actions - both POST, since the selection is a list of ids.
+        bulkUpdate: () => '/leads/bulk/update',
+        bulkDestroy: () => '/leads/bulk/delete',
         attachProduct: (id: number) => `/leads/${id}/products`,
         detachProduct: (id: number, matchId: number) => `/leads/${id}/products/${matchId}`,
 
@@ -80,6 +92,10 @@ export const routes = {
         store: () => '/products',
         update: (id: number) => `/products/${id}`,
         destroy: (id: number) => `/products/${id}`,
+
+        // Bulk actions - both POST, since the selection is a list of ids.
+        bulkUpdate: () => '/products/bulk/update',
+        bulkDestroy: () => '/products/bulk/delete',
     },
 
     activities: {

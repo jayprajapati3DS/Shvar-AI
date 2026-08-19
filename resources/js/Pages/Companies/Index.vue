@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
 import { ref } from 'vue';
+import BulkActionBar from '@/Components/Bulk/BulkActionBar.vue';
+import BulkEditModal from '@/Components/Bulk/BulkEditModal.vue';
 import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import DataTable from '@/Components/DataTable.vue';
 import EmptyState from '@/Components/EmptyState.vue';
@@ -8,11 +10,12 @@ import FilterBar from '@/Components/FilterBar.vue';
 import CompanyFormModal from '@/Components/Forms/CompanyFormModal.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { useBulkSelection } from '@/composables/useBulkSelection';
 import { routes } from '@/routes';
 import type { Company, Paginated } from '@/types/models';
-import type { Column } from '@/types/ui';
+import type { BulkField, Column } from '@/types/ui';
 
-const { companies, filters, filterOptions } = defineProps<{
+const { companies, filters, filterOptions, bulkFields } = defineProps<{
     companies: Paginated<Company>;
     filters: Record<string, string | undefined>;
     filterOptions: {
@@ -20,6 +23,7 @@ const { companies, filters, filterOptions } = defineProps<{
         industries: string[];
         companyTypes: string[];
     };
+    bulkFields: BulkField[];
 }>();
 
 const columns: Column[] = [
@@ -38,6 +42,30 @@ const showForm = ref(false);
 const editing = ref<Company | null>(null);
 const deleting = ref<Company | null>(null);
 const processing = ref(false);
+
+// Bulk selection. Reads the rows through a getter so it re-derives after every
+// Inertia visit rather than holding a stale array.
+const selection = useBulkSelection(() => companies.data);
+const showBulkEdit = ref(false);
+const confirmingBulkDelete = ref(false);
+
+function bulkDelete() {
+    const ids = selection.selectedIds.value;
+    processing.value = true;
+
+    router.post(
+        routes.companies.bulkDestroy(),
+        { ids },
+        {
+            preserveScroll: true,
+            onSuccess: () => selection.forget(ids),
+            onFinish: () => {
+                processing.value = false;
+                confirmingBulkDelete.value = false;
+            },
+        },
+    );
+}
 
 function create() {
     editing.value = null;
@@ -106,7 +134,18 @@ function formatDate(value: string | null): string {
         </EmptyState>
 
         <template v-else>
-            <DataTable :columns="columns" :rows="companies.data" :row-key="(row) => row.id">
+            <DataTable
+                :columns="columns"
+                :rows="companies.data"
+                :row-key="(row) => row.id"
+                selectable
+                select-label="company"
+                :is-selected="selection.isSelected"
+                :all-selected="selection.allVisibleSelected.value"
+                :some-selected="selection.someVisibleSelected.value"
+                @toggle="selection.toggle"
+                @toggle-all="selection.toggleAllVisible"
+            >
                 <template #row="{ row }">
                     <td class="td">
                         <Link :href="routes.companies.show(row.id)" class="font-medium text-slate-900 hover:text-indigo-600">
@@ -140,6 +179,36 @@ function formatDate(value: string | null): string {
     </div>
 
     <CompanyFormModal :open="showForm" :company="editing" @close="showForm = false" />
+
+    <BulkActionBar
+        :count="selection.count.value"
+        :off-page-count="selection.offPageCount.value"
+        label="company"
+        :processing="processing"
+        @edit="showBulkEdit = true"
+        @delete="confirmingBulkDelete = true"
+        @clear="selection.clear"
+    />
+
+    <BulkEditModal
+        :open="showBulkEdit"
+        :fields="bulkFields"
+        :ids="selection.selectedIds.value"
+        label="company"
+        :url="routes.companies.bulkUpdate()"
+        @close="showBulkEdit = false"
+        @saved="showBulkEdit = false"
+    />
+
+    <ConfirmDialog
+        :open="confirmingBulkDelete"
+        :title="`Delete ${selection.count.value} compan${selection.count.value === 1 ? 'y' : 'ies'}?`"
+        message="The company records are removed. Their contacts and leads are kept, but will no longer be linked to a company. This cannot be undone."
+        :confirm-label="`Delete ${selection.count.value}`"
+        :processing="processing"
+        @cancel="confirmingBulkDelete = false"
+        @confirm="bulkDelete"
+    />
 
     <ConfirmDialog
         :open="deleting !== null"
