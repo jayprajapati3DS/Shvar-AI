@@ -24,9 +24,9 @@ evidence and a sales angle — for you to review. See
 **[docs/PRODUCT_INTELLIGENCE.md](docs/PRODUCT_INTELLIGENCE.md)**.
 
 Phase 4 added email outreach: from an accepted recommendation, the local model writes three
-personalised drafts for you to edit and approve. **Nothing is ever sent without your approval,
-and this phase cannot send at all** — the only email service simulates delivery to the local log.
-See **[docs/EMAIL_GENERATION.md](docs/EMAIL_GENERATION.md)**.
+personalised drafts for you to edit and approve. **Nothing is ever sent without your approval.**
+Sending is simulated by default; real delivery over your own SMTP server is opt-in and guarded by
+a recipient allowlist. See **[docs/EMAIL_GENERATION.md](docs/EMAIL_GENERATION.md)**.
 
 Follow-up drafting is a later phase and not yet built.
 
@@ -39,7 +39,8 @@ privacy detail, and section 9 below for setup.
 | Not present | Why |
 | --- | --- |
 | OpenAI, Anthropic, Gemini, Azure, any cloud AI | Never — see Privacy |
-| Real email sending (SMTP, Gmail, Outlook) | Later phase — Phase 4 simulates only |
+| Gmail API / Microsoft Graph sending | Later phase — both need OAuth |
+| Any third-party mail service (SendGrid, Mailgun…) | Never — SMTP to your own server only |
 | Follow-up generation | Later phase |
 | Email scheduling / automatic follow-ups | Later phase |
 | RAG / embeddings / vector database | Later phase |
@@ -565,10 +566,16 @@ case-sensitive in PostgreSQL, where it should become `ilike`.
   (direct, consultative, executive-short) from an *accepted* Phase 3 recommendation. When it cannot
   run, the panel says which of contact / email address / company / accepted recommendation is missing,
   so the button explains itself instead of failing on click
-- **Nothing is sent, ever** — generation produces drafts; `Approved` is the only sendable status;
-  and the only implementation of `EmailServiceInterface` simulates, writing the message to the local
-  log. The approval check exists in three places (controller, editor, transport) because a gap in one
-  must not be a gap in the system
+- **Nothing is sent without approval** — generation produces drafts and `Approved` is the only
+  sendable status. The check exists in three places (controller, editor, transport) because a gap in
+  one must not be a gap in the system
+- **Sending is simulated until you say otherwise** — `EMAIL_DRIVER=local` writes the message to the
+  local log and contacts nobody. Real SMTP delivery is opt-in, and while `EMAIL_ALLOWED_RECIPIENTS`
+  is set only those addresses can receive anything, so the whole flow can be exercised for real
+  without a prospect getting a half-finished email. The rail lives in `.env`, not the settings page —
+  a guardrail you can switch off by clicking is not much of a guardrail
+- **The SMTP password is encrypted at rest and never sent to the browser** — the settings page is
+  told `password_set: true` and nothing more
 - **The signature is never AI-written** — the validator strips any sign-off block the model
   produced and the application appends yours. A model asked to sign off invents a job title and a
   phone number, and a wrong phone number in outreach sent in your name is a real problem

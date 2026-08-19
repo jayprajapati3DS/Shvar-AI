@@ -9,6 +9,9 @@ use App\Services\Email\EmailRenderer;
 use App\Services\Email\EmailServiceInterface;
 use App\Services\Email\EmailSettings;
 use App\Services\Email\LocalTestEmailService;
+use App\Services\Email\RecipientAllowlist;
+use App\Services\Email\SmtpEmailService;
+use App\Services\Email\SmtpSettings;
 use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 
@@ -33,6 +36,8 @@ class EmailServiceProvider extends ServiceProvider
         $this->app->singleton(EmailSettings::class);
         $this->app->singleton(EmailRenderer::class);
         $this->app->singleton(EmailQualityChecker::class);
+        $this->app->singleton(SmtpSettings::class);
+        $this->app->singleton(RecipientAllowlist::class);
 
         $this->app->singleton(EmailServiceInterface::class, function ($app): EmailServiceInterface {
             $driver = (string) config('email.driver', 'local');
@@ -40,15 +45,26 @@ class EmailServiceProvider extends ServiceProvider
             return match ($driver) {
                 'local' => new LocalTestEmailService($app->make(EmailRenderer::class)),
 
-                // Named here so the intent is documented in code rather than
-                // only in a plan: these are Phase 5, and they do not exist yet.
-                'smtp', 'gmail', 'microsoft_graph' => throw new InvalidArgumentException(
-                    "Email driver [{$driver}] is not implemented. Phase 4 ships simulated sending only; "
-                    .'real delivery arrives in a later phase.'
+                // REAL DELIVERY. Everything above this line produced local rows
+                // a human could read and delete; this contacts people. The
+                // approval check and the recipient allowlist both live inside
+                // the service rather than around it.
+                'smtp' => new SmtpEmailService(
+                    $app->make(EmailRenderer::class),
+                    $app->make(SmtpSettings::class),
+                    $app->make(EmailSettings::class),
+                    $app->make(RecipientAllowlist::class),
+                ),
+
+                // Named so the intent is documented in code rather than only in
+                // a plan. Both need OAuth, which is a later phase.
+                'gmail', 'microsoft_graph' => throw new InvalidArgumentException(
+                    "Email driver [{$driver}] is not implemented. It needs OAuth, which is a later "
+                    ."phase. Use 'smtp' for real delivery, or 'local' to simulate."
                 ),
 
                 default => throw new InvalidArgumentException(
-                    "Unsupported email driver [{$driver}]. Only 'local' is available."
+                    "Unsupported email driver [{$driver}]. Available: 'local' (simulated), 'smtp' (real)."
                 ),
             };
         });

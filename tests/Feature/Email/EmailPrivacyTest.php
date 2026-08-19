@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Email;
 
+use App\Models\EmailSetting;
 use App\Services\AI\LocalEndpointGuard;
 use App\Services\Email\EmailServiceInterface;
 use App\Services\Email\LocalTestEmailService;
+use App\Services\Email\RecipientAllowlist;
+use App\Services\Email\SmtpEmailService;
+use App\Services\Email\SmtpSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
@@ -93,15 +97,19 @@ class EmailPrivacyTest extends TestCase
     /* No real email transport */
     /* ------------------------------------------------------------------ */
 
-    public function test_the_only_email_service_is_the_local_simulated_one(): void
+    public function test_the_default_email_service_simulates(): void
     {
+        // EMAIL_DRIVER is 'local' unless someone deliberately changes it, and
+        // 'local' contacts nobody. Real delivery is opt-in, never a default.
+        $this->assertSame('local', config('email.driver'));
+
         $service = app(EmailServiceInterface::class);
 
         $this->assertInstanceOf(LocalTestEmailService::class, $service);
         $this->assertTrue($service->isSimulated());
     }
 
-    public function test_no_other_implementation_of_the_email_interface_exists(): void
+    public function test_only_the_two_known_transports_exist(): void
     {
         $implementations = [];
 
@@ -111,14 +119,31 @@ class EmailPrivacyTest extends TestCase
             }
         }
 
-        // Adding one is a deliberate act. This test is the reminder that doing
-        // so means real emails can leave the machine.
-        $this->assertSame(['LocalTestEmailService'], $implementations);
+        sort($implementations);
+
+        // This list grew by one when SMTP was added, which is exactly what this
+        // test is for: adding a transport is the moment real email can leave the
+        // machine, and it should not be possible to do it quietly. A third
+        // implementation trips this again.
+        $this->assertSame(['LocalTestEmailService', 'SmtpEmailService'], $implementations);
+    }
+
+    public function test_smtp_is_never_reachable_without_changing_the_driver(): void
+    {
+        // The service is resolved from config and nothing else. There is no
+        // request parameter, setting or heuristic that can select 'smtp'.
+        $this->assertInstanceOf(LocalTestEmailService::class, app(EmailServiceInterface::class));
+
+        config(['email.driver' => 'smtp']);
+        app()->forgetInstance(EmailServiceInterface::class);
+
+        $this->assertInstanceOf(SmtpEmailService::class, app(EmailServiceInterface::class));
+        $this->assertFalse(app(EmailServiceInterface::class)->isSimulated());
     }
 
     public function test_an_unimplemented_driver_throws_rather_than_falling_back(): void
     {
-        foreach (['smtp', 'gmail', 'microsoft_graph', 'nonsense'] as $driver) {
+        foreach (['gmail', 'microsoft_graph', 'nonsense'] as $driver) {
             config(['email.driver' => $driver]);
             app()->forgetInstance(EmailServiceInterface::class);
 
@@ -146,7 +171,7 @@ class EmailPrivacyTest extends TestCase
         }
     }
 
-    public function test_the_email_layer_makes_no_outbound_request(): void
+    public function test_nothing_in_the_email_layer_calls_out_except_the_smtp_transport(): void
     {
         $iterator = new \RecursiveIteratorIterator(
             new \RecursiveDirectoryIterator(app_path('Services/Email'))
@@ -159,16 +184,126 @@ class EmailPrivacyTest extends TestCase
                 continue;
             }
 
+            // SmtpEmailService is the one thing here whose job is to reach the
+            // network, and it does so through Symfony's transport rather than a
+            // raw socket. Exempted by name so the exemption is visible, not by
+            // loosening the rule for everything.
+            if ($file->getFilename() === 'SmtpEmailService.php') {
+                continue;
+            }
+
             $contents = (string) file_get_contents($file->getPathname());
 
             foreach ($forbidden as $needle) {
                 $this->assertStringNotContainsString(
                     $needle,
                     $contents,
-                    "{$file->getFilename()} makes an outbound call. The email layer must not.",
+                    "{$file->getFilename()} makes an outbound call. Only the SMTP transport may.",
                 );
             }
         }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* SMTP credentials */
+    /* ------------------------------------------------------------------ */
+
+    public function test_the_smtp_password_is_encrypted_at_rest(): void
+    {
+        app(SmtpSettings::class)->save([
+            'smtp_host' => 'smtp.office365.com',
+            'smtp_username' => 'jay@example.test',
+            'smtp_password' => 'hunter2-not-in-the-clear',
+        ]);
+
+        $stored = EmailSetting::where('key', 'smtp_password')->value('value');
+
+        $this->assertNotNull($stored);
+        $this->assertNotSame('hunter2-not-in-the-clear', $stored);
+        $this->assertStringNotContainsString('hunter2', $stored);
+
+        // ...and still readable by the one class that needs it.
+        $this->assertSame('hunter2-not-in-the-clear', app(SmtpSettings::class)->password());
+    }
+
+    public function test_the_smtp_password_never_reaches_the_browser(): void
+    {
+        app(SmtpSettings::class)->save([
+            'smtp_host' => 'smtp.office365.com',
+            'smtp_username' => 'jay@example.test',
+            'smtp_password' => 'hunter2-not-in-the-clear',
+        ]);
+
+        $payload = app(SmtpSettings::class)->toArray();
+
+        $this->assertArrayNotHasKey('password', $payload);
+        $this->assertTrue($payload['password_set']);
+        $this->assertStringNotContainsString(
+            'hunter2',
+            json_encode($payload, JSON_THROW_ON_ERROR),
+        );
+
+        // And not through the settings page either.
+        $response = $this->get(route('settings.email.index'))->assertOk();
+
+        $this->assertStringNotContainsString(
+            'hunter2',
+            json_encode($response->viewData('page')['props'], JSON_THROW_ON_ERROR),
+        );
+    }
+
+    public function test_a_password_that_cannot_be_decrypted_reads_as_unconfigured(): void
+    {
+        // What happens if APP_KEY changes. The right answer is "SMTP is not set
+        // up, set it again", not a 500 on the settings page.
+        EmailSetting::updateOrCreate(
+            ['key' => 'smtp_password'],
+            ['value' => 'not-a-valid-ciphertext'],
+        );
+
+        $settings = app(SmtpSettings::class);
+
+        $this->assertNull($settings->password());
+        $this->assertFalse($settings->isConfigured());
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* The recipient allowlist */
+    /* ------------------------------------------------------------------ */
+
+    public function test_an_empty_allowlist_restricts_nothing(): void
+    {
+        config(['email.allowed_recipients' => '']);
+
+        $allowlist = app(RecipientAllowlist::class);
+
+        $this->assertFalse($allowlist->isRestricting());
+        $this->assertTrue($allowlist->permits('anyone@anywhere.example'));
+    }
+
+    public function test_the_allowlist_permits_only_listed_addresses(): void
+    {
+        config(['email.allowed_recipients' => 'me@example.test, other@example.test']);
+
+        $allowlist = app(RecipientAllowlist::class);
+
+        $this->assertTrue($allowlist->isRestricting());
+        $this->assertTrue($allowlist->permits('me@example.test'));
+        $this->assertTrue($allowlist->permits('  ME@Example.TEST '));
+        $this->assertFalse($allowlist->permits('prospect@realcompany.example'));
+        $this->assertFalse($allowlist->permits(null));
+        $this->assertFalse($allowlist->permits(''));
+    }
+
+    public function test_a_leading_at_permits_a_whole_domain(): void
+    {
+        config(['email.allowed_recipients' => '@3dsurgical.com']);
+
+        $allowlist = app(RecipientAllowlist::class);
+
+        $this->assertTrue($allowlist->permits('anyone@3dsurgical.com'));
+        $this->assertFalse($allowlist->permits('anyone@3dsurgical.com.evil.example'));
+        $this->assertFalse($allowlist->permits('anyone@elsewhere.example'));
     }
 
     /* ------------------------------------------------------------------ */

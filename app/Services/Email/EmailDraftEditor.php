@@ -11,15 +11,17 @@ use App\Models\EmailDraft;
 use App\Models\EmailDraftVersion;
 use App\Models\EmailGeneration;
 use App\Services\Email\Exceptions\EmailNotApprovedException;
+use App\Services\Email\Exceptions\RecipientNotAllowedException;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Owns every state change a draft can go through.
  *
  * Gathered into one class rather than spread across controllers because the
- * transitions are the part of Phase 4 that must not drift: approve() is the
- * only thing anywhere that sets approved_at, and markSent() is the only thing
- * that sets sent_at - and it refuses a draft that is not approved.
+ * transitions are the part of this workflow that must not drift: approve() is
+ * the only thing anywhere that sets approved_at, and send() is the only thing
+ * that sets sent_at - and it refuses a draft that is not approved, whichever
+ * transport is configured.
  *
  * Every edit appends a version rather than replacing one, so the model's
  * original wording survives however many rewrites follow it.
@@ -174,8 +176,11 @@ class EmailDraftEditor
     /**
      * Send an approved draft through the configured service.
      *
-     * Phase 4 only ever resolves LocalTestEmailService, which simulates. The
-     * approval check happens in three places on purpose - here, in the
+     * Which service that is depends on EMAIL_DRIVER: 'local' simulates,
+     * 'smtp' really sends. This method does not know or care - it asks the
+     * same question of both.
+     *
+     * The approval check happens in three places on purpose - here, in the
      * controller, and inside the transport - because this is the one rule in
      * the whole application where a gap would mean contacting a real person
      * without permission.
@@ -195,6 +200,11 @@ class EmailDraftEditor
         try {
             $result = $this->mailer->send($draft);
         } catch (EmailNotApprovedException $e) {
+            return ['sent' => false, 'reason' => $e->userMessage(), 'result' => null];
+        } catch (RecipientNotAllowedException $e) {
+            // The allowlist refusing an address is a guardrail doing its job,
+            // not a delivery failure. Marking the draft Failed would be wrong -
+            // nothing was attempted and the draft is still perfectly good.
             return ['sent' => false, 'reason' => $e->userMessage(), 'result' => null];
         } catch (\Throwable $e) {
             report($e);
@@ -229,7 +239,7 @@ class EmailDraftEditor
                     $result->recipient,
                     $result->simulated
                         ? ' Simulated - nothing left this machine.'
-                        : '',
+                        : ' Delivered over '.$result->mode.'. This one was real.',
                 ),
             );
         });

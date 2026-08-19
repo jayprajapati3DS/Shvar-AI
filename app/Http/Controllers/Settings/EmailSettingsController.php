@@ -8,9 +8,13 @@ use App\Enums\EmailLength;
 use App\Enums\EmailTone;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateEmailSettingsRequest;
+use App\Http\Requests\UpdateSmtpSettingsRequest;
 use App\Services\Email\EmailRenderer;
 use App\Services\Email\EmailServiceInterface;
 use App\Services\Email\EmailSettings;
+use App\Services\Email\RecipientAllowlist;
+use App\Services\Email\SmtpEmailService;
+use App\Services\Email\SmtpSettings;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -32,6 +36,8 @@ class EmailSettingsController extends Controller
         private readonly EmailSettings $settings,
         private readonly EmailRenderer $renderer,
         private readonly EmailServiceInterface $mailer,
+        private readonly SmtpSettings $smtp,
+        private readonly RecipientAllowlist $allowlist,
     ) {}
 
     public function index(): Response
@@ -54,8 +60,69 @@ class EmailSettingsController extends Controller
                 'mode' => $this->mailer->mode(),
                 'description' => $this->mailer->description(),
                 'allowed' => (bool) config('email.allow_test_send', false),
+                'driver' => (string) config('email.driver', 'local'),
+            ],
+
+            // Connection settings. Note what is NOT in here: the password.
+            // SmtpSettings::toArray() reports whether one is set and never what
+            // it is, so it cannot leak through this payload.
+            'smtp' => $this->smtp->toArray(),
+
+            // Read-only. The allowlist is a safety rail, and a rail you can
+            // remove by clicking is not much of one - it comes from .env, and
+            // this page shows it rather than editing it. Same treatment as
+            // OLLAMA_URL on the AI settings page.
+            'allowlist' => [
+                ...$this->allowlist->describe(),
+                'read_only' => true,
+                'env_key' => 'EMAIL_ALLOWED_RECIPIENTS',
             ],
         ]);
+    }
+
+    /**
+     * Save the SMTP connection.
+     *
+     * Separate from update() because it writes a credential rather than a
+     * preference, and because the password needs the UNCHANGED sentinel - the
+     * form was never given the real one to send back.
+     */
+    public function updateSmtp(UpdateSmtpSettingsRequest $request): RedirectResponse
+    {
+        $this->smtp->save($request->validated());
+
+        return back()->with('success', 'SMTP settings saved. Test the connection before sending.');
+    }
+
+    /** Forget every SMTP setting, password included. */
+    public function forgetSmtp(): RedirectResponse
+    {
+        $this->smtp->forget();
+
+        return back()->with('success', 'SMTP settings cleared.');
+    }
+
+    /**
+     * Verify the connection without sending anything.
+     *
+     * Opens the transport, authenticates, stops. The mail equivalent of "Test
+     * AI Connection": it answers "are these credentials right" without putting
+     * a message in anyone's inbox.
+     */
+    public function testSmtp(): RedirectResponse
+    {
+        $service = new SmtpEmailService(
+            $this->renderer,
+            $this->smtp,
+            $this->settings,
+            $this->allowlist,
+        );
+
+        $result = $service->testConnection();
+
+        return $result['ok']
+            ? back()->with('success', $result['message'])
+            : back()->with('error', 'Could not connect: '.$result['message']);
     }
 
     public function update(UpdateEmailSettingsRequest $request): RedirectResponse

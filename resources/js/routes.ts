@@ -155,6 +155,12 @@ export const routes = {
             index: () => '/settings/email',
             update: () => '/settings/email',
             resetSignature: () => '/settings/email/signature',
+
+            // SMTP connection. The password is never sent back to the browser,
+            // so the form posts a sentinel when it was not retyped.
+            updateSmtp: () => '/settings/email/smtp',
+            testSmtp: () => '/settings/email/smtp/test',
+            forgetSmtp: () => '/settings/email/smtp',
         },
     },
 } as const;

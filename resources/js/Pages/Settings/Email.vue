@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import SmtpSettingsCard from '@/Components/Email/SmtpSettingsCard.vue';
 import FormField from '@/Components/FormField.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import { routes } from '@/routes';
-import type { SelectOption, SendingMode } from '@/types/models';
+import type {
+    RecipientAllowlist,
+    SelectOption,
+    SendingMode,
+    SmtpSettings,
+} from '@/types/models';
 
 interface EmailSettingsPayload {
     sender_name: string | null;
@@ -23,12 +29,17 @@ interface EmailSettingsPayload {
     length: string;
 }
 
-const { settings, options, preview, sending } = defineProps<{
+const { settings, options, preview, sending, smtp, allowlist } = defineProps<{
     settings: EmailSettingsPayload;
     options: { tones: SelectOption[]; lengths: SelectOption[] };
     preview: string;
     sending: SendingMode;
+    smtp: SmtpSettings;
+    allowlist: RecipientAllowlist;
 }>();
+
+/** True when EMAIL_DRIVER is 'smtp' - approved emails really go out. */
+const sendingIsReal = computed(() => !sending.simulated);
 
 const form = useForm({
     sender_name: settings.sender_name ?? '',
@@ -86,7 +97,13 @@ function submit() {
     </PageHeader>
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <form class="space-y-6 lg:col-span-2" @submit.prevent="submit">
+        <!--
+            The SMTP card carries its own form, so it is a sibling of this one
+            rather than a child - nested forms are invalid HTML and the browser
+            drops the inner one, which would silently break Save connection.
+        -->
+        <div class="space-y-6 lg:col-span-2">
+        <form class="space-y-6" @submit.prevent="submit">
             <!-- ------------------------------------------------ profile -->
             <section class="card p-5">
                 <header class="mb-4">
@@ -200,6 +217,10 @@ function submit() {
             </div>
         </form>
 
+        <!-- ------------------------------------------------ smtp -->
+        <SmtpSettingsCard :smtp="smtp" :live="sendingIsReal" />
+        </div>
+
         <!-- ------------------------------------------------ sidebar -->
         <div class="space-y-6">
             <section class="card p-5">
@@ -224,12 +245,69 @@ function submit() {
                 <pre class="whitespace-pre-wrap rounded-md border border-slate-200 px-3 py-2 font-sans text-sm leading-relaxed text-slate-700">{{ preview }}</pre>
             </section>
 
-            <section class="card border-indigo-100 bg-indigo-50/60 p-5">
-                <h2 class="mb-2 text-sm font-semibold text-indigo-900">Sending</h2>
-                <p class="text-xs text-indigo-900">{{ sending.description }}</p>
-                <p class="mt-2 text-xs text-indigo-800">
-                    There is no mail server, account or API key to configure — Phase 4 cannot send an
-                    email at all.
+            <!--
+                What actually happens when you click send. Coloured by whether it
+                is real, because "simulated" and "this reaches a person" should
+                never look the same at a glance.
+            -->
+            <section
+                class="card p-5"
+                :class="sendingIsReal ? 'border-amber-200 bg-amber-50/70' : 'border-indigo-100 bg-indigo-50/60'"
+            >
+                <h2
+                    class="mb-2 text-sm font-semibold"
+                    :class="sendingIsReal ? 'text-amber-900' : 'text-indigo-900'"
+                >
+                    Sending — {{ sendingIsReal ? 'REAL' : 'simulated' }}
+                </h2>
+
+                <p class="text-xs" :class="sendingIsReal ? 'text-amber-900' : 'text-indigo-900'">
+                    {{ sending.description }}
+                </p>
+
+                <p
+                    v-if="!sendingIsReal"
+                    class="mt-2 text-xs text-indigo-800"
+                >
+                    Set <code>EMAIL_DRIVER=smtp</code> in <code>.env</code> once the connection above
+                    tests clean. Until then nothing leaves this machine.
+                </p>
+            </section>
+
+            <!--
+                The safety rail. Read-only on purpose: a rail you can remove by
+                clicking is not much of a rail.
+            -->
+            <section
+                class="card p-5"
+                :class="allowlist.restricting ? 'border-emerald-200 bg-emerald-50/60' : ''"
+            >
+                <h2 class="mb-2 text-sm font-semibold text-slate-900">
+                    Recipient allowlist
+                    <span
+                        class="ml-1 text-xs font-normal"
+                        :class="allowlist.restricting ? 'text-emerald-700' : 'text-slate-500'"
+                    >
+                        {{ allowlist.restricting ? 'ON' : 'off' }}
+                    </span>
+                </h2>
+
+                <p class="text-xs text-slate-600">{{ allowlist.summary }}</p>
+
+                <ul v-if="allowlist.entries.length" class="mt-2 space-y-0.5">
+                    <li
+                        v-for="entry in allowlist.entries"
+                        :key="entry"
+                        class="font-mono text-xs text-emerald-800"
+                    >
+                        {{ entry }}
+                    </li>
+                </ul>
+
+                <p class="mt-3 text-xs text-slate-500">
+                    Set from <code>{{ allowlist.env_key }}</code> in <code>.env</code>, not here —
+                    a guardrail you can switch off by clicking is not much of a guardrail.
+                    Comma-separated; a leading <code>@</code> allows a whole domain.
                 </p>
             </section>
         </div>

@@ -4,7 +4,11 @@ Phase 4 of Shvar AI Copilot. The local model writes outreach emails from what th
 CRM already knows, and a human decides whether any of them are worth sending.
 
 **The one rule everything else is arranged around: nothing is ever sent without an
-explicit human approval, and in this phase nothing is sent at all.**
+explicit human approval.**
+
+Sending is simulated by default (`EMAIL_DRIVER=local`) and contacts nobody. Real
+delivery over SMTP is opt-in and guarded by a recipient allowlist — see
+[section 15](#15-real-sending-over-smtp).
 
 ---
 
@@ -29,7 +33,8 @@ Lead
         └────────────────┴──▶  Approve  ──▶  Approved
                                                  │
                                                  ▼
-                                          Send (simulated)  ──▶  Sent
+                                       Send  ──▶  Sent
+                            (simulated, or real over SMTP)
 ```
 
 Two things cannot happen, by construction:
@@ -37,9 +42,9 @@ Two things cannot happen, by construction:
 - **Generation cannot send.** `EmailGenerator` holds no reference to
   `EmailServiceInterface`. The two never meet.
 - **An unapproved draft cannot be sent.** Checked in three places — the
-  controller, `EmailDraftEditor::send()`, and inside `LocalTestEmailService`
-  itself, which throws `EmailNotApprovedException` rather than trusting its
-  caller.
+  controller, `EmailDraftEditor::send()`, and inside the transport itself, which
+  throws `EmailNotApprovedException` rather than trusting its caller. Both
+  transports do this, so it holds however delivery is configured.
 
 ---
 
@@ -53,11 +58,17 @@ Laravel  ──▶  AIServiceInterface  ──▶  OllamaAIService  ──▶  h
                                                               Local LLM
 ```
 
-- No OpenAI, Anthropic, Gemini, Azure OpenAI, or any other cloud LLM.
-- No external email service. No Gmail, no Microsoft Graph, no SMTP, no SendGrid.
+- No OpenAI, Anthropic, Gemini, Azure OpenAI, or any other cloud LLM. Every
+  token is generated on this machine.
+- No third-party email service. No Gmail API, no Microsoft Graph, no SendGrid,
+  no Mailgun. The only way an email leaves is your own SMTP server, which you
+  configure and switch on deliberately.
 - No outbound HTTP anywhere in `app/Services/Email` — asserted by a test that
-  greps the directory.
-- Company, contact, product and email content never leave the machine.
+  greps the directory, with `SmtpEmailService` exempted by name so the exemption
+  is visible rather than a loosened rule.
+- Company, contact and product data are never transmitted anywhere. The only
+  thing that can leave is an email you wrote, edited and approved, to the
+  address on the draft.
 
 `tests/Feature/Email/EmailPrivacyTest.php` asserts all of this against the source
 tree rather than against behaviour, so a future change that introduces a cloud
@@ -475,38 +486,142 @@ exists to avoid.
 
 ---
 
-## 15. Future email providers
+## 15. Real sending over SMTP
+
+Simulated sending is still the default. `EMAIL_DRIVER=local` contacts nobody, and
+nothing switches it for you.
+
+### Setup for Microsoft 365
+
+**Settings → Email → Mail server (SMTP)**
+
+| Field | Value |
+| --- | --- |
+| Host | `smtp.office365.com` |
+| Port | `587` |
+| Encryption | STARTTLS |
+| Username | your full email address |
+| Password | see below |
+
+Then **Test connection** — it authenticates and stops, sending nothing.
+
+**The Microsoft 365 caveat.** Many tenants have SMTP AUTH disabled, and Microsoft
+has been switching it off by default. If the test fails with a 535 or
+"SmtpClientAuthentication is disabled", one of these applies:
+
+- **SMTP AUTH is off for the mailbox.** An admin enables it per-mailbox in the
+  Microsoft 365 admin centre, or tenant-wide via
+  `Set-TransportConfig -SmtpClientAuthenticationDisabled $false`.
+- **MFA is on** (it usually is). A normal password will not work — you need an
+  **app password**, which requires security defaults to be off and per-user MFA
+  configured. Your IT will know which.
+- **Conditional access** may block the sign-in regardless. The test message will
+  say so.
+
+If SMTP AUTH cannot be enabled on your tenant, Microsoft Graph with OAuth is the
+supported route — that is a later phase and is not built.
+
+### The recipient allowlist
+
+**This is the guardrail, and it is on until you turn it off.**
+
+```dotenv
+EMAIL_ALLOWED_RECIPIENTS="dwij.mistry@3dsurgical.com"
+```
+
+While that is non-empty, `SmtpEmailService` delivers only to those addresses and
+refuses everything else with an explanation. A leading `@` allows a whole domain,
+so `@3dsurgical.com` lets you test with colleagues.
+
+Clearing it removes the restriction.
+
+It lives in `.env` rather than the settings page on purpose. The drafts are
+addressed to real people at real medical technology companies, and a rail you can
+switch off by clicking is not much of a rail — the same reasoning that keeps
+`OLLAMA_URL` out of the AI settings form. The page shows the current value
+read-only so you can see what is in force.
+
+A refusal is **not** a delivery failure: the draft stays `Approved`, nothing is
+marked `Failed`, and you can retry after editing the list.
+
+### Going live
+
+1. Configure SMTP in Settings and **Test connection**.
+2. Put **your own address** in `EMAIL_ALLOWED_RECIPIENTS`.
+3. Set `EMAIL_DRIVER=smtp` in `.env`.
+4. Approve a draft and send it. Check what actually arrives.
+5. Only then widen or clear the allowlist.
+
+The settings page turns amber and the send button says **Send** rather than
+**Test send (simulated)** once sending is real, because "simulated" and "this
+reaches a person" must never look the same at a glance.
+
+### How the credentials are stored
+
+- The password is **encrypted at rest** with `APP_KEY`, via `Crypt::encryptString`.
+  It is the only value in this application that is not plain text, because it is
+  the only one that is a secret rather than data you typed.
+- It is **never sent to the browser**. `SmtpSettings::toArray()` reports
+  `password_set: true` and nothing more, so it cannot leak through an Inertia
+  payload, a page cache or a screenshot. The form posts a sentinel when you did
+  not retype it.
+- If `APP_KEY` changes, the stored password stops decrypting and SMTP reads as
+  unconfigured — "set it up again", not a 500.
+
+### The three gates
+
+`SmtpEmailService::send()` refuses, in order:
+
+1. **Not approved** → `EmailNotApprovedException`. Checked here as well as in the
+   controller and the editor, because a transport that trusts its caller is one
+   refactor away from sending something nobody signed off on.
+2. **Not on the allowlist** → `RecipientNotAllowedException`.
+3. **Not configured** → refuses rather than attempting an anonymous relay.
+
+It is driven through Symfony Mailer directly, never Laravel's `Mail` facade, so
+`config/mail.php` — stock scaffolding pointing at whatever `MAIL_HOST` happens to
+say — is never involved. Plain text only; nothing builds HTML.
+
+`SmtpSendingTest` covers all three gates. No test opens a socket: the interesting
+behaviour of a transport that can contact real people is everything it refuses to
+do. A successful send is verified by a human, deliberately, with **Test
+connection** and a first send to their own address.
+
+---
+
+## 16. Future email providers
 
 The abstraction is in place; the implementations are not.
 
 ```
 EmailServiceInterface
         │
-        ├── LocalTestEmailService     ← the only one that exists
-        ├── SmtpEmailService          ← later phase
-        ├── GmailEmailService         ← later phase
-        └── MicrosoftGraphEmailService ← later phase
+        ├── LocalTestEmailService      ← simulated, the default
+        ├── SmtpEmailService           ← real, opt-in via EMAIL_DRIVER
+        ├── GmailEmailService          ← later phase (OAuth)
+        └── MicrosoftGraphEmailService ← later phase (OAuth)
 ```
 
-`EmailServiceProvider` resolves the interface in one place. `EMAIL_DRIVER` values
-`smtp`, `gmail` and `microsoft_graph` are recognised and **throw** — a typo can
-never silently produce a transport nobody chose, which for a component whose job
-is contacting real people is the failure mode worth being loud about.
+`EmailServiceProvider` resolves the interface in one place. `gmail` and
+`microsoft_graph` are recognised and **throw** — a typo can never silently produce
+a transport nobody chose, which for a component whose job is contacting real
+people is the failure mode worth being loud about.
 
 Adding one means:
 
-- OAuth for Gmail / Microsoft Graph, with tokens stored locally
-- A real `send()` that returns `simulated: false` and its own `delivery_mode`
+- OAuth, with tokens stored locally and refreshed
+- A `send()` that refuses an unapproved draft and honours the allowlist, exactly
+  as `SmtpEmailService` does
 - Deciding what `Queued` and `Failed` mean in practice, and a retry story
-- Re-reading §34: whatever is added must still refuse an unapproved draft
 
-`EmailPrivacyTest::test_no_other_implementation_of_the_email_interface_exists()`
-fails the moment a second implementation appears. That is intentional — it is the
-reminder that real emails can now leave the machine.
+`EmailPrivacyTest::test_only_the_two_known_transports_exist()` fails the moment a
+third implementation appears. That is intentional — it is the reminder that
+adding a transport is the moment real email can leave the machine, and it should
+not be possible to do it quietly.
 
 ---
 
-## 16. Not in this phase
+## 17. Not in this phase
 
 Explicitly out of scope (§39): Gmail OAuth, Outlook OAuth, real sending,
 automatic follow-ups, email scheduling, lead discovery, website scraping for

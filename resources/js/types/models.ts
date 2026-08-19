@@ -361,10 +361,38 @@ export interface EmailPreview {
     body_without_signature: string;
 }
 
-/** How this build delivers. Always simulated in Phase 4. */
+/** How this build delivers: simulated, or really over SMTP. */
 export interface SendingMode {
+    /** True when nothing actually leaves the machine. */
     simulated: boolean;
     mode: string;
     description: string;
+    /** Whether the send button is offered at all. */
     allowed: boolean;
+    /** The configured EMAIL_DRIVER. */
+    driver?: string;
+}
+
+/** SMTP connection settings. The password is never included - only whether one is set. */
+export interface SmtpSettings {
+    host: string | null;
+    port: number;
+    encryption: string;
+    username: string | null;
+    /** Whether a password is stored. The value itself never reaches the browser. */
+    password_set: boolean;
+    from_address: string | null;
+    from_name: string | null;
+    configured: boolean;
+    gaps: string[];
+    encryption_modes: string[];
+}
+
+/** The recipient allowlist - the safety rail on real sending. Read-only, from .env. */
+export interface RecipientAllowlist {
+    restricting: boolean;
+    entries: string[];
+    summary: string;
+    read_only: boolean;
+    env_key: string;
 }

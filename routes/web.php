@@ -179,6 +179,13 @@ Route::prefix('settings')->name('settings.')->group(function (): void {
     Route::delete('email/signature', [EmailSettingsController::class, 'resetSignature'])
         ->name('email.signature.reset');
 
+    // SMTP connection. Separate from the profile because it writes a credential:
+    // the password is encrypted at rest and never sent back to the browser, so
+    // the form posts a sentinel when it was not retyped.
+    Route::put('email/smtp', [EmailSettingsController::class, 'updateSmtp'])->name('email.smtp.update');
+    Route::post('email/smtp/test', [EmailSettingsController::class, 'testSmtp'])->name('email.smtp.test');
+    Route::delete('email/smtp', [EmailSettingsController::class, 'forgetSmtp'])->name('email.smtp.forget');
+
     // Local request log
     Route::get('ai/logs', [AiLogController::class, 'index'])->name('ai.logs');
     Route::get('ai/logs/{aiRequest}', [AiLogController::class, 'show'])->name('ai.logs.show');
