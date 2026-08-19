@@ -37,32 +37,66 @@ class CsvImporter
      * @var array<string, string>
      */
     private const COLUMN_MAP = [
+        // --- Company ---------------------------------------------------
         'companyname' => 'company_name',
         'company' => 'company_name',
         'website' => 'website',
         'url' => 'website',
+        'companywebsite' => 'website',
         'country' => 'country',
+        'companycountry' => 'country',
         'state' => 'state',
+        'region' => 'state',
+        'companystate' => 'state',
         'city' => 'city',
+        'companycity' => 'city',
+        'industry' => 'industry',
+        'companytype' => 'company_type',
+        'type' => 'company_type',
+        'description' => 'company_description',
+        'companydescription' => 'company_description',
+        'about' => 'company_description',
+        'specialties' => 'company_specialties',
+        'companyspecialties' => 'company_specialties',
+        'specialities' => 'company_specialties',
+        'productsservices' => 'company_products',
+        'companyproductsservices' => 'company_products',
+        'productsandservices' => 'company_products',
+        'whattheysell' => 'company_products',
+        'companynotes' => 'company_notes',
+
+        // --- Contact ---------------------------------------------------
         'contactfirstname' => 'first_name',
         'firstname' => 'first_name',
         'contactlastname' => 'last_name',
         'lastname' => 'last_name',
         'jobtitle' => 'job_title',
         'title' => 'job_title',
+        'role' => 'job_title',
         'department' => 'department',
         'email' => 'email',
+        'contactemail' => 'email',
         'phone' => 'phone',
+        'contactphone' => 'phone',
         'linkedin' => 'linkedin_url',
         'linkedinurl' => 'linkedin_url',
-        'industry' => 'industry',
-        'companytype' => 'company_type',
+        'contactcountry' => 'contact_country',
+        'contactcity' => 'contact_city',
+        'contactnotes' => 'contact_notes',
+
+        // --- Lead ------------------------------------------------------
         'leadsource' => 'lead_source',
         'source' => 'lead_source',
         'leadstatus' => 'lead_status',
         'status' => 'lead_status',
         'priority' => 'priority',
+        'assignedto' => 'assigned_to',
+        'owner' => 'assigned_to',
+
+        // Bare "Notes" stays the LEAD note, as it was before these columns
+        // existed - an existing template must keep importing the same way.
         'notes' => 'notes',
+        'leadnotes' => 'notes',
     ];
 
     /**
@@ -221,6 +255,7 @@ class CsvImporter
                     'lead_source' => $data['lead_source'] ?: LeadSource::Import->value,
                     'lead_status' => $data['lead_status'] ?: LeadStatus::New->value,
                     'priority' => $data['priority'] ?: Priority::Medium->value,
+                    'assigned_to' => $data['assigned_to'] ?: null,
                     'notes' => $data['notes'] ?: null,
                 ]);
 
@@ -237,6 +272,61 @@ class CsvImporter
             'leads' => $leadsCreated,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Company columns from one row, ready for create() or a blank-fill update.
+     *
+     * Every field on the company form is represented, so an import can carry
+     * the same information you would type by hand.
+     *
+     * @param  array<string, string>  $data
+     * @return array<string, string|null>
+     */
+    private function companyAttributes(array $data): array
+    {
+        return [
+            'name' => $data['company_name'],
+            'website' => $data['website'] ?: null,
+            'country' => $data['country'] ?: null,
+            'state' => $data['state'] ?: null,
+            'city' => $data['city'] ?: null,
+            'industry' => $data['industry'] ?: null,
+            'company_type' => $data['company_type'] ?: null,
+            'description' => $data['company_description'] ?: null,
+
+            // Multi-value fields are stored newline-separated, matching how the
+            // form and Product::toLines() treat them. Excel writes CRLF inside a
+            // quoted cell, and a stray carriage return would show up in the UI.
+            'specialties' => $this->multiline($data['company_specialties']),
+            'products_services' => $this->multiline($data['company_products']),
+
+            'notes' => $data['company_notes'] ?: null,
+        ];
+    }
+
+    /**
+     * Normalise a multi-value cell to one value per line.
+     *
+     * Accepts newlines, semicolons or commas, because people write all three -
+     * and Excel wraps any of them in CRLF.
+     */
+    private function multiline(?string $value): ?string
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        // Normalise line endings first, then split. No regex escapes to get
+        // wrong, and it reads plainly.
+        $normalised = str_replace(["\r\n", "\r", ';'], "\n", trim($value));
+
+        $parts = array_values(array_filter(
+            array_map(trim(...), explode("\n", $normalised)),
+            fn (string $part) => $part !== '',
+        ));
+
+        return $parts === [] ? null : implode("\n", $parts);
     }
 
     /**
@@ -264,20 +354,29 @@ class CsvImporter
         $key = Company::normaliseName($data['company_name']);
 
         if ($key !== '' && isset($this->companyIndex[$key])) {
-            return Company::find($this->companyIndex[$key]);
+            $existing = Company::find($this->companyIndex[$key]);
+
+            // Enrich, never overwrite. A row that carries a description for a
+            // company you already have should fill that gap - but a blank cell
+            // must not wipe something you typed by hand.
+            if ($existing !== null) {
+                $fill = array_filter(
+                    $this->companyAttributes($data),
+                    fn ($value, $field) => filled($value) && blank($existing->{$field}),
+                    ARRAY_FILTER_USE_BOTH,
+                );
+
+                if ($fill !== []) {
+                    $existing->update($fill);
+                }
+            }
+
+            return $existing;
         }
 
         $created++;
 
-        $company = Company::create([
-            'name' => $data['company_name'],
-            'website' => $data['website'] ?: null,
-            'country' => $data['country'] ?: null,
-            'state' => $data['state'] ?: null,
-            'city' => $data['city'] ?: null,
-            'industry' => $data['industry'] ?: null,
-            'company_type' => $data['company_type'] ?: null,
-        ]);
+        $company = Company::create($this->companyAttributes($data));
 
         // Keep the index warm so later rows naming the same company reuse it.
         if ($key !== '') {
@@ -315,8 +414,11 @@ class CsvImporter
             'email' => $data['email'] ?: null,
             'phone' => $data['phone'] ?: null,
             'linkedin_url' => $data['linkedin_url'] ?: null,
-            'country' => $data['country'] ?: null,
-            'city' => $data['city'] ?: null,
+            // Contact-specific location when the file gives one, otherwise the
+            // company's - a contact usually sits where the company does.
+            'country' => $data['contact_country'] ?: ($data['country'] ?: null),
+            'city' => $data['contact_city'] ?: ($data['city'] ?: null),
+            'notes' => $data['contact_notes'] ?: null,
         ]);
     }
 

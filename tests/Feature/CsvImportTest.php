@@ -254,6 +254,156 @@ class CsvImportTest extends TestCase
         ])->assertSessionHasErrors('file');
     }
 
+    public function test_every_company_form_field_can_be_imported(): void
+    {
+        // The gap this closes: the template used to omit description,
+        // specialties, products/services and company notes, so a CSV could not
+        // carry what the form could.
+        $csv = <<<'CSV'
+        Company Name,Website,Industry,Company Type,Country,State,City,Description,Specialties,Products Services,Company Notes
+        Northfield Ortho,northfield.example,Medical Devices,PSI Manufacturer,United States,Minnesota,Minneapolis,Designs patient-specific knee instrumentation.,Knee;Hip,Cutting guides,Met at a trade show
+        CSV;
+
+        $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
+
+        $company = Company::sole();
+
+        $this->assertSame('Northfield Ortho', $company->name);
+        $this->assertSame('Medical Devices', $company->industry);
+        $this->assertSame('PSI Manufacturer', $company->company_type);
+        $this->assertSame('Minnesota', $company->state);
+        $this->assertSame('Designs patient-specific knee instrumentation.', $company->description);
+        // Semicolons, commas and CRLF in a multi-value cell all normalise to
+        // one value per line, matching how the form stores them.
+        $this->assertSame("Knee\nHip", $company->specialties);
+        $this->assertSame('Cutting guides', $company->products_services);
+        $this->assertSame('Met at a trade show', $company->notes);
+    }
+
+    public function test_contact_and_lead_specific_columns_are_imported(): void
+    {
+        $csv = <<<'CSV'
+        Company Name,Country,City,Contact First Name,Email,Contact Country,Contact City,Contact Notes,Assigned To,Notes
+        Acme Medical,Germany,Berlin,Asha,asha@acme.example,India,Chennai,Prefers email,Jay Prajapati,Wants a demo
+        CSV;
+
+        $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
+
+        $contact = Contact::sole();
+        $lead = Lead::sole();
+
+        // Contact location overrides the company's when the file gives one.
+        $this->assertSame('India', $contact->country);
+        $this->assertSame('Chennai', $contact->city);
+        $this->assertSame('Prefers email', $contact->notes);
+
+        $this->assertSame('Jay Prajapati', $lead->assigned_to);
+        $this->assertSame('Wants a demo', $lead->notes);
+    }
+
+    public function test_a_contact_inherits_the_company_location_when_none_is_given(): void
+    {
+        $csv = <<<'CSV'
+        Company Name,Country,City,Contact First Name,Email
+        Acme Medical,Germany,Berlin,Asha,asha@acme.example
+        CSV;
+
+        $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
+
+        $contact = Contact::sole();
+
+        $this->assertSame('Germany', $contact->country);
+        $this->assertSame('Berlin', $contact->city);
+    }
+
+    public function test_bare_notes_still_means_the_lead_note(): void
+    {
+        // Backwards compatibility: files written against the old template must
+        // keep importing exactly as before.
+        $csv = <<<'CSV'
+        Company Name,Email,Notes
+        Legacy Co,legacy@example.com,A lead note
+        CSV;
+
+        $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
+
+        $this->assertSame('A lead note', Lead::sole()->notes);
+        $this->assertNull(Company::sole()->notes);
+    }
+
+    public function test_importing_fills_blanks_on_an_existing_company_without_overwriting(): void
+    {
+        $existing = Company::factory()->create([
+            'name' => 'Acme Medical',
+            'industry' => 'Hand-typed industry',
+            'description' => null,
+        ]);
+
+        $csv = <<<'CSV'
+        Company Name,Industry,Description,Email
+        Acme Medical,CSV industry,A description from the file,someone@acme.example
+        CSV;
+
+        $this->post(route('import.store'), [
+            'file' => $this->csv($csv),
+            'import_duplicates' => true,
+        ])->assertRedirect();
+
+        $existing->refresh();
+
+        // The blank was filled...
+        $this->assertSame('A description from the file', $existing->description);
+        // ...but what you typed by hand was left alone.
+        $this->assertSame('Hand-typed industry', $existing->industry);
+    }
+
+    public function test_alternative_header_spellings_are_accepted(): void
+    {
+        // "First Name" is needed for a contact to exist at all - a row with a
+        // job title and nobody to attach it to creates no contact, by design.
+        $csv = <<<'CSV'
+        Company,URL,Type,About,First Name,Role,Owner
+        Acme Medical,acme.example,Hospital,They do surgery,Asha,Head of R&D,Jay
+        CSV;
+
+        $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
+
+        $company = Company::sole();
+
+        $this->assertSame('Acme Medical', $company->name);
+        $this->assertSame('Hospital', $company->company_type);
+        $this->assertSame('They do surgery', $company->description);
+        $this->assertSame('Head of R&D', Contact::sole()->job_title);
+        $this->assertSame('Jay', Lead::sole()->assigned_to);
+    }
+
+    public function test_the_template_covers_every_importable_field(): void
+    {
+        $response = $this->get(route('import.template'));
+        $header = strtolower(explode("
+", $response->streamedContent())[0]);
+
+        // If a field exists on the form it must be in the template, or a user
+        // cannot import what they can type.
+        foreach ([
+            'description', 'specialties', 'products services', 'company notes',
+            'contact country', 'contact city', 'contact notes', 'assigned to',
+        ] as $column) {
+            $this->assertStringContainsString($column, $header, "Template is missing [{$column}].");
+        }
+    }
+
+    public function test_the_template_includes_a_usable_example_row(): void
+    {
+        $content = $this->get(route('import.template'))->streamedContent();
+        $lines = array_filter(explode("
+", $content));
+
+        $this->assertGreaterThan(1, count($lines), 'Template should carry an example row.');
+        // On a .example domain, so it cannot be mistaken for a real lead.
+        $this->assertStringContainsString('.example', $content);
+    }
+
     public function test_the_template_download_contains_the_expected_headers(): void
     {
         $response = $this->get(route('import.template'));

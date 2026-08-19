@@ -72,25 +72,103 @@ class ImportController extends Controller
         return response()->streamDownload(function () use ($columns): void {
             $handle = fopen('php://output', 'wb');
             fputcsv($handle, $columns, escape: '');
+
+            // One filled example row. Header-only templates leave people
+            // guessing how to write the multi-value fields, and the newline
+            // convention for Specialties is not obvious from a bare header.
+            fputcsv($handle, $this->exampleRow(), escape: '');
+
             fclose($handle);
-        }, 'sales-copilot-import-template.csv', ['Content-Type' => 'text/csv']);
+        }, 'shvar-ai-copilot-import-template.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    /**
+     * A realistic example row for the downloadable template.
+     *
+     * Deliberately an invented company on a .example domain (RFC 2606, cannot
+     * resolve) so nobody imports it as a real lead by accident.
+     *
+     * @return list<string>
+     */
+    private function exampleRow(): array
+    {
+        return [
+            // Company
+            'Northfield Orthopedic Devices',
+            'northfield-ortho.example',
+            'Medical Devices',
+            'PSI Manufacturer',
+            'United States',
+            'Minnesota',
+            'Minneapolis',
+            'Designs patient-specific knee and hip instrumentation from CT imaging.',
+            // Multi-value fields accept one per line, or comma/semicolon separated.
+            "Knee
+Hip",
+            'Patient-specific cutting guides, revision instrumentation',
+            'Met at a trade show; evaluating in-house planning software.',
+
+            // Contact
+            'Dana',
+            'Whitfield',
+            'Director of Engineering',
+            'R&D',
+            'dana.whitfield@northfield-ortho.example',
+            '+1 612 555 0142',
+            'linkedin.com/in/example',
+            'United States',
+            'Minneapolis',
+            'Prefers email over calls.',
+
+            // Lead
+            'Conference',
+            'Qualified',
+            'High',
+            'Jay Prajapati',
+            'Outsources segmentation today; wants it in-house.',
+        ];
     }
 
     /**
      * The expected header set and the values the importer accepts. Shared by the
      * page, the preview and the downloadable template so they cannot drift.
      *
-     * @return array{columns: list<string>, statuses: list<string>, priorities: list<string>, maxRows: int}
+     * @return array{columns: list<string>, groups: array<string, list<string>>, statuses: list<string>, priorities: list<string>, maxRows: int}
      */
     private function templateDefinition(): array
     {
         return [
+            // Every field on the company, contact and lead forms, so an import
+            // can carry the same information you would type by hand. Grouped so
+            // the downloaded template reads in a sensible order.
             'columns' => [
-                'Company Name', 'Website', 'Country', 'State', 'City',
+                // Company
+                'Company Name', 'Website', 'Industry', 'Company Type',
+                'Country', 'State', 'City',
+                'Description', 'Specialties', 'Products Services', 'Company Notes',
+
+                // Contact
                 'Contact First Name', 'Contact Last Name', 'Job Title', 'Department',
-                'Email', 'Phone', 'LinkedIn',
-                'Industry', 'Company Type',
-                'Lead Source', 'Lead Status', 'Priority', 'Notes',
+                'Email', 'Phone', 'LinkedIn', 'Contact Country', 'Contact City', 'Contact Notes',
+
+                // Lead
+                'Lead Source', 'Lead Status', 'Priority', 'Assigned To', 'Notes',
+            ],
+
+            // Shown on the page so it is obvious which column feeds which record.
+            'groups' => [
+                'Company' => [
+                    'Company Name', 'Website', 'Industry', 'Company Type',
+                    'Country', 'State', 'City',
+                    'Description', 'Specialties', 'Products Services', 'Company Notes',
+                ],
+                'Contact' => [
+                    'Contact First Name', 'Contact Last Name', 'Job Title', 'Department',
+                    'Email', 'Phone', 'LinkedIn', 'Contact Country', 'Contact City', 'Contact Notes',
+                ],
+                'Lead' => [
+                    'Lead Source', 'Lead Status', 'Priority', 'Assigned To', 'Notes',
+                ],
             ],
             'statuses' => LeadStatus::values(),
             'priorities' => Priority::values(),

@@ -14,6 +14,8 @@ import type { ImportPreview } from '@/types/models';
 const { template, preview } = defineProps<{
     template: {
         columns: string[];
+        /** Columns grouped by which record they populate. */
+        groups: Record<string, string[]>;
         statuses: string[];
         priorities: string[];
         maxRows: number;
@@ -273,13 +275,28 @@ function reset() {
             <section class="card">
                 <header class="border-b border-slate-200 px-5 py-3.5">
                     <h2 class="text-sm font-semibold text-slate-900">Recognised columns</h2>
-                    <p class="text-xs text-slate-500">Header order does not matter. Extras are ignored.</p>
+                    <p class="text-xs text-slate-500">
+                        Every field on the Company, Contact and Lead forms. Order does not matter,
+                        extras are ignored, and you can leave out any column you do not have.
+                    </p>
                 </header>
-                <ul class="divide-y divide-slate-100">
-                    <li v-for="column in template.columns" :key="column" class="px-5 py-2 text-sm text-slate-700">
-                        {{ column }}
-                    </li>
-                </ul>
+
+                <div v-for="(columns, group) in template.groups" :key="group" class="border-b border-slate-100 last:border-0">
+                    <p class="bg-slate-50 px-5 py-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {{ group }}
+                    </p>
+                    <ul class="divide-y divide-slate-100">
+                        <li v-for="column in columns" :key="column" class="px-5 py-1.5 text-sm text-slate-700">
+                            {{ column }}
+                        </li>
+                    </ul>
+                </div>
+
+                <p class="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs text-slate-500">
+                    <strong class="text-slate-700">Specialties</strong> and
+                    <strong class="text-slate-700">Products Services</strong> hold several values:
+                    put one per line inside the cell, or separate them with commas or semicolons.
+                </p>
             </section>
 
             <section class="card">
