@@ -48,6 +48,14 @@ class ComOutlookGateway implements OutlookGatewayInterface
     /** olMailItem */
     private const ITEM_MAIL = 0;
 
+    /**
+     * The codepage COM strings are converted with.
+     *
+     * Everything in this application is UTF-8; com_dotnet assumes ANSI unless
+     * told otherwise. See application().
+     */
+    private const CP_UTF8 = 65001;
+
     private ?COM $outlook = null;
 
     public function isAvailable(): bool
@@ -235,10 +243,30 @@ class ComOutlookGateway implements OutlookGatewayInterface
             // Items, so a throw here is not conclusive on its own.
             $item = $namespace->GetItemFromID($entryId);
 
-            // A sent message has a SentOn timestamp; an unsent draft does not.
+            // MailItem.Sent is the authoritative answer and the only one that
+            // is actually a boolean.
+            //
+            // This USED to test SentOn for emptiness, which was wrong in the
+            // worst possible direction: an unsent draft reports SentOn as
+            // '01-01-4501' - Outlook's null-date sentinel, a perfectly
+            // non-empty string - so every queued draft looked sent. That would
+            // have promoted drafts to Sent that were still sitting unsent in a
+            // compose window, which is precisely the lie Queued exists to
+            // prevent. Found by checking a real draft rather than trusting the
+            // property name.
+            $sent = $item->Sent;
+
+            if (is_bool($sent)) {
+                return $sent;
+            }
+
+            // Older builds can hand back a VARIANT rather than a bool. Fall
+            // back to SentOn, rejecting the 4501 sentinel explicitly.
             $sentOn = $this->safeString($item, 'SentOn');
 
-            return $sentOn !== null && $sentOn !== '';
+            return $sentOn !== null
+                && $sentOn !== ''
+                && ! str_contains($sentOn, '4501');
         } catch (Throwable) {
             return false;
         }
@@ -268,7 +296,18 @@ class ComOutlookGateway implements OutlookGatewayInterface
         }
 
         try {
-            return $this->outlook = new COM('Outlook.Application');
+            // CP_UTF8 (65001) is not optional. PHP strings here are UTF-8, but
+            // com_dotnet converts them to COM BSTRs using com.code_page, which
+            // is unset by default and falls back to the system ANSI codepage.
+            // The result is silent mojibake in the message body: an apostrophe
+            // arrives as "â€™", an en dash as "â€\"", a non-breaking space as
+            // "Â". Nothing errors - the email just looks broken to whoever
+            // receives it.
+            //
+            // Passed per-instance rather than set globally in php.ini, so the
+            // fix travels with the code instead of depending on how this
+            // machine happens to be configured.
+            return $this->outlook = new COM('Outlook.Application', null, self::CP_UTF8);
         } catch (Throwable $e) {
             throw OutlookException::unreachable($e);
         }

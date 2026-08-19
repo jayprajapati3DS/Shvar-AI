@@ -37,5 +37,18 @@
         <env name="OLLAMA_URL" value="http://localhost:11434"/>
         <env name="OLLAMA_MODEL" value="qwen3:8b"/>
         <env name="AI_LOGGING_ENABLED" value="true"/>
+
+        <!--
+            Pinned so the suite can never send an email, whatever the developer
+            has in .env. Without this the result of a test run depends on how
+            one machine happens to be configured - and the failure mode is a
+            test suite that quietly starts contacting real people.
+
+            The allowlist is empty on purpose: tests that care about it set it
+            themselves, so each one states the rail it is exercising.
+        -->
+        <env name="EMAIL_DRIVER" value="local"/>
+        <env name="EMAIL_ALLOWED_RECIPIENTS" value=""/>
+        <env name="EMAIL_ALLOW_TEST_SEND" value="true"/>
     </php>
 </phpunit>

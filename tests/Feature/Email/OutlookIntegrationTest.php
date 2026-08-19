@@ -248,6 +248,45 @@ class OutlookIntegrationTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
+    /* The COM boundary */
+    /* ------------------------------------------------------------------ */
+
+    public function test_the_com_object_is_created_with_the_utf8_codepage(): void
+    {
+        // Asserted against the source because the bug is invisible at runtime
+        // without a real Outlook: com_dotnet converts PHP strings to COM BSTRs
+        // using com.code_page, which is unset by default and falls back to the
+        // system ANSI codepage. UTF-8 text then arrives as mojibake - an
+        // apostrophe as "a-euro-tm", an en dash as garbage, a non-breaking
+        // space as "A-circumflex". Nothing throws; the email just looks broken
+        // to whoever receives it.
+        $source = (string) file_get_contents(
+            app_path('Services/Email/Outlook/ComOutlookGateway.php')
+        );
+
+        $this->assertStringContainsString('CP_UTF8 = 65001', $source);
+        $this->assertStringContainsString(
+            "new COM('Outlook.Application', null, self::CP_UTF8)",
+            $source,
+        );
+    }
+
+    public function test_sent_detection_does_not_rely_on_sent_on_being_empty(): void
+    {
+        // An unsent Outlook draft reports SentOn as '01-01-4501' - the null-date
+        // sentinel, and a perfectly non-empty string. Testing SentOn for
+        // emptiness therefore called every queued draft sent, which would have
+        // marked messages as delivered while they sat unsent in a compose
+        // window. MailItem.Sent is the authoritative boolean.
+        $source = (string) file_get_contents(
+            app_path('Services/Email/Outlook/ComOutlookGateway.php')
+        );
+
+        $this->assertStringContainsString('$sent = $item->Sent;', $source);
+        $this->assertStringContainsString("str_contains(\$sentOn, '4501')", $source);
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Reading the inbox */
     /* ------------------------------------------------------------------ */
 
