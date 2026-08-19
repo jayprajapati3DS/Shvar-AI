@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\BulkCompanyActionRequest;
 use App\Http\Requests\StoreCompanyRequest;
 use App\Http\Resources\CompanyAnalysisResource;
@@ -20,6 +21,8 @@ use Inertia\Response;
 
 class CompanyController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         // Only used to tell the page whether research is switched on, so the
         // button can explain itself rather than failing on click.
@@ -87,7 +90,7 @@ class CompanyController extends Controller
     {
         $company = Company::create($request->validated());
 
-        return to_route('companies.show', $company)
+        return $this->backTo('companies.index')
             ->with('success', "Company \"{$company->name}\" created.");
     }
 
@@ -95,7 +98,7 @@ class CompanyController extends Controller
     {
         $company->update($request->validated());
 
-        return back()->with('success', "Company \"{$company->name}\" updated.");
+        return $this->backTo('companies.index')->with('success', "Company \"{$company->name}\" updated.");
     }
 
     public function destroy(Company $company): RedirectResponse
@@ -119,7 +122,7 @@ class CompanyController extends Controller
             $request->clear(),
         );
 
-        return back()->with(
+        return $this->backTo('companies.index')->with(
             $changed > 0 ? 'success' : 'error',
             $changed > 0
                 ? "Updated {$changed} compan(ies)."
@@ -131,7 +134,7 @@ class CompanyController extends Controller
     {
         $deleted = $editor->delete(Company::class, $request->ids());
 
-        return back()->with(
+        return $this->backTo('companies.index')->with(
             'success',
             "Deleted {$deleted} compan(ies). The people you were working there were kept as leads."
         );

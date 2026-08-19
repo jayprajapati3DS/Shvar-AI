@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Enums\AiRequestStatus;
 use App\Enums\AiRequestType;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\AiRequestResource;
 use App\Models\AiRequest;
@@ -24,6 +25,8 @@ use Inertia\Response;
  */
 class AiLogController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function index(Request $request): Response
     {
         $filters = $request->only(['search', 'status', 'type', 'model']);
@@ -67,7 +70,7 @@ class AiLogController extends Controller
     {
         $aiRequest->delete();
 
-        return back()->with('success', 'Log entry deleted.');
+        return $this->backTo('settings.ai.logs')->with('success', 'Log entry deleted.');
     }
 
     /** Empty the whole local log. */
@@ -77,6 +80,6 @@ class AiLogController extends Controller
 
         AiRequest::query()->delete();
 
-        return back()->with('success', "Cleared {$deleted} log entr(ies).");
+        return $this->backTo('settings.ai.logs')->with('success', "Cleared {$deleted} log entr(ies).");
     }
 }

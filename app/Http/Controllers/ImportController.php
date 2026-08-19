@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\ImportCsvRequest;
 use App\Services\CsvImporter;
 use Illuminate\Http\RedirectResponse;
@@ -22,6 +23,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ImportController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function create(): Response
     {
         return Inertia::render('Import/Index', [
@@ -53,7 +56,7 @@ class ImportController extends Controller
         );
 
         if ($result['imported'] === 0) {
-            return back()->with('error', 'Nothing was imported. '.$result['skipped'].' row(s) skipped.');
+            return $this->backTo('import.create')->with('error', 'Nothing was imported. '.$result['skipped'].' row(s) skipped.');
         }
 
         return to_route('leads.index')->with(

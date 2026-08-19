@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Enums\EmailLength;
 use App\Enums\EmailTone;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateEmailSettingsRequest;
 use App\Http\Requests\UpdateSmtpSettingsRequest;
@@ -33,6 +34,8 @@ use Inertia\Response;
  */
 class EmailSettingsController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         private readonly EmailSettings $settings,
         private readonly EmailRenderer $renderer,
@@ -98,7 +101,7 @@ class EmailSettingsController extends Controller
     {
         $this->smtp->save($request->validated());
 
-        return back()->with('success', 'SMTP settings saved. Test the connection before sending.');
+        return $this->backTo('settings.email.index')->with('success', 'SMTP settings saved. Test the connection before sending.');
     }
 
     /** Forget every SMTP setting, password included. */
@@ -106,7 +109,7 @@ class EmailSettingsController extends Controller
     {
         $this->smtp->forget();
 
-        return back()->with('success', 'SMTP settings cleared.');
+        return $this->backTo('settings.email.index')->with('success', 'SMTP settings cleared.');
     }
 
     /**
@@ -136,7 +139,7 @@ class EmailSettingsController extends Controller
     {
         $this->settings->save($request->validated());
 
-        return back()->with('success', 'Email settings saved.');
+        return $this->backTo('settings.email.index')->with('success', 'Email settings saved.');
     }
 
     /** Drop the hand-written signature so the composed one applies again. */
@@ -144,6 +147,6 @@ class EmailSettingsController extends Controller
     {
         $this->settings->save(['signature' => null]);
 
-        return back()->with('success', 'Signature reset. It is now composed from your profile fields.');
+        return $this->backTo('settings.email.index')->with('success', 'Signature reset. It is now composed from your profile fields.');
     }
 }

@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\ActivityType;
 use App\Enums\RecommendationStatus;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Resources\LeadAnalysisResource;
 use App\Models\Activity;
 use App\Models\Lead;
@@ -30,6 +31,8 @@ use Illuminate\Http\Request;
  */
 class LeadAnalysisController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         private readonly AiProductMatcher $matcher,
     ) {}
@@ -46,7 +49,7 @@ class LeadAnalysisController extends Controller
             $analysis = $this->matcher->analyse($lead);
         } catch (AiException $e) {
             // The attempt is already in the local AI log by this point.
-            return back()->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
+            return $this->backTo('leads.show', $lead->id)->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
         }
 
         $count = $analysis->recommendations()->count();
@@ -54,14 +57,14 @@ class LeadAnalysisController extends Controller
         // An empty result is a legitimate outcome, not a failure - the model
         // deciding this company is outside the market. Say so plainly.
         if ($count === 0) {
-            return back()->with(
+            return $this->backTo('leads.show', $lead->id)->with(
                 'info',
                 'Analysis complete: the local model found no product in the portfolio that the stored '
                 .'information supports recommending.',
             );
         }
 
-        return back()->with('success', sprintf(
+        return $this->backTo('leads.show', $lead->id)->with('success', sprintf(
             'Analysis complete: %d recommendation(s) from %s in %ss. Review and accept the ones you want.',
             $count,
             $analysis->model,
@@ -103,7 +106,7 @@ class LeadAnalysisController extends Controller
         // Idempotent. A retried request - or a click whose response the browser
         // never saw - must not log a second "accepted" entry on the timeline.
         if ($match->status === RecommendationStatus::Accepted) {
-            return back()->with('info', sprintf(
+            return $this->backTo('leads.show', $lead->id)->with('info', sprintf(
                 '%s was already accepted.',
                 $match->product?->name ?? 'That recommendation',
             ));
@@ -126,7 +129,7 @@ class LeadAnalysisController extends Controller
             ),
         );
 
-        return back()->with('success', sprintf(
+        return $this->backTo('leads.show', $lead->id)->with('success', sprintf(
             '%s accepted as a product opportunity.',
             $match->product?->name ?? 'Recommendation',
         ));
@@ -147,7 +150,7 @@ class LeadAnalysisController extends Controller
             'reviewed_at' => now(),
         ]);
 
-        return back()->with('success', 'Recommendation rejected. It stays in the history.');
+        return $this->backTo('leads.show', $lead->id)->with('success', 'Recommendation rejected. It stays in the history.');
     }
 
     /** Move a recommendation out of the way without judging it. */
@@ -160,6 +163,6 @@ class LeadAnalysisController extends Controller
             'reviewed_at' => now(),
         ]);
 
-        return back()->with('success', 'Recommendation archived.');
+        return $this->backTo('leads.show', $lead->id)->with('success', 'Recommendation archived.');
     }
 }

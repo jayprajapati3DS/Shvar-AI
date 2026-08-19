@@ -6,6 +6,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Enums\AiRequestStatus;
 use App\Enums\AiRequestType;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateAiSettingsRequest;
 use App\Models\AiRequest;
@@ -26,6 +27,8 @@ use Inertia\Response;
  */
 class AiSettingsController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         private readonly AIServiceInterface $ai,
         private readonly AiSettings $settings,
@@ -64,7 +67,7 @@ class AiSettingsController extends Controller
         // endpoint cannot be changed here even if it were posted.
         $this->settings->save($request->settings());
 
-        return back()->with('success', 'AI settings saved locally.');
+        return $this->backTo('settings.ai.index')->with('success', 'AI settings saved locally.');
     }
 
     /** Restore the shipped system prompt. */
@@ -72,7 +75,7 @@ class AiSettingsController extends Controller
     {
         $this->settings->forget('system_prompt');
 
-        return back()->with('success', 'System prompt reset to the default.');
+        return $this->backTo('settings.ai.index')->with('success', 'System prompt reset to the default.');
     }
 
     /**
@@ -87,10 +90,10 @@ class AiSettingsController extends Controller
             $result = $this->ai->ping();
         } catch (AiException $e) {
             // userMessage() only - never the exception message or a trace.
-            return back()->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
+            return $this->backTo('settings.ai.index')->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
         }
 
-        return back()->with('success', sprintf(
+        return $this->backTo('settings.ai.index')->with('success', sprintf(
             'Connection successful. Model %s responded in %ss.',
             $result->model,
             number_format($result->seconds(), 2),
@@ -107,14 +110,14 @@ class AiSettingsController extends Controller
         $status = $this->ai->status();
 
         if (! $status->connected) {
-            return back()->with('error', $status->message ?? 'Ollama is not reachable.');
+            return $this->backTo('settings.ai.index')->with('error', $status->message ?? 'Ollama is not reachable.');
         }
 
         if (! $status->modelInstalled) {
-            return back()->with('error', $status->message ?? 'The configured model is not installed.');
+            return $this->backTo('settings.ai.index')->with('error', $status->message ?? 'The configured model is not installed.');
         }
 
-        return back()->with('success', sprintf(
+        return $this->backTo('settings.ai.index')->with('success', sprintf(
             'Ollama reachable (%d model(s) installed).',
             count($status->installedModels),
         ));

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\ActivityType;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\StoreActivityRequest;
 use App\Models\Activity;
 use App\Models\Company;
@@ -20,6 +21,8 @@ use Illuminate\Http\RedirectResponse;
  */
 class ActivityController extends Controller
 {
+    use RedirectsToOrigin;
+
     /** @var array<string, class-string<Model>> */
     private const SUBJECTS = [
         'leads' => Lead::class,
@@ -37,7 +40,7 @@ class ActivityController extends Controller
             'occurred_at' => $request->validated('occurred_at') ?? now(),
         ]);
 
-        return back()->with('success', 'Activity logged.');
+        return $this->backTo($subjectType.'.index')->with('success', 'Activity logged.');
     }
 
     public function destroy(string $subjectType, int $subjectId, Activity $activity): RedirectResponse
@@ -51,7 +54,7 @@ class ActivityController extends Controller
 
         $activity->delete();
 
-        return back()->with('success', 'Activity removed.');
+        return $this->backTo($subjectType.'.index')->with('success', 'Activity removed.');
     }
 
     private function resolveSubject(string $subjectType, int $subjectId): Model

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\StoreLeadProductMatchRequest;
 use App\Models\Lead;
 use App\Models\LeadProductMatch;
@@ -18,11 +19,13 @@ use Illuminate\Http\RedirectResponse;
  */
 class LeadProductMatchController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function store(StoreLeadProductMatchRequest $request, Lead $lead): RedirectResponse
     {
         $lead->productMatches()->create($request->matchAttributes());
 
-        return back()->with('success', 'Product added to this lead.');
+        return $this->backTo('leads.show', $lead->id)->with('success', 'Product added to this lead.');
     }
 
     public function destroy(Lead $lead, LeadProductMatch $match): RedirectResponse
@@ -32,6 +35,6 @@ class LeadProductMatchController extends Controller
 
         $match->delete();
 
-        return back()->with('success', 'Product removed from this lead.');
+        return $this->backTo('leads.show', $lead->id)->with('success', 'Product removed from this lead.');
     }
 }

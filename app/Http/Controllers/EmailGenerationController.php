@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\RecommendationStatus;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\GenerateEmailRequest;
 use App\Models\EmailGeneration;
 use App\Models\Lead;
@@ -31,6 +32,8 @@ use Illuminate\Http\RedirectResponse;
  */
 class EmailGenerationController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         private readonly EmailGenerator $generator,
         private readonly EmailDraftEditor $editor,
@@ -56,14 +59,14 @@ class EmailGenerationController extends Controller
             $resolved = $this->resolveRecommendation($lead, $id);
 
             if (is_string($resolved)) {
-                return back()->with('error', $resolved);
+                return $this->backTo('leads.show', $lead->id)->with('error', $resolved);
             }
 
             $set[] = $resolved;
         }
 
         if ($blocker = $this->missingEssentials($lead)) {
-            return back()->with('error', $blocker);
+            return $this->backTo('leads.show', $lead->id)->with('error', $blocker);
         }
 
         $replacing = $this->resolveReplacing($lead, $request->integer('regenerate_from'));
@@ -77,7 +80,7 @@ class EmailGenerationController extends Controller
             );
         } catch (AiException $e) {
             // The attempt is already in the local AI log by this point.
-            return back()->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
+            return $this->backTo('leads.show', $lead->id)->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
         }
 
         $count = $generation->drafts()->count();
@@ -97,7 +100,7 @@ class EmailGenerationController extends Controller
             $message .= ' Compare them against the previous version before choosing.';
         }
 
-        return back()->with('success', $message);
+        return $this->backTo('leads.show', $lead->id)->with('success', $message);
     }
 
     /**
@@ -113,7 +116,7 @@ class EmailGenerationController extends Controller
         $previous = $generation->regeneratedFrom;
 
         if ($previous === null) {
-            return back()->with('error', 'That generation did not replace an earlier one.');
+            return $this->backTo('leads.show', $lead->id)->with('error', 'That generation did not replace an earlier one.');
         }
 
         [$keep, $discard] = $choice === 'previous'
@@ -122,7 +125,7 @@ class EmailGenerationController extends Controller
 
         $this->editor->resolveRegeneration($keep, $discard);
 
-        return back()->with('success', $choice === 'previous'
+        return $this->backTo('leads.show', $lead->id)->with('success', $choice === 'previous'
             ? 'Kept the previous version. The new drafts were archived, not deleted.'
             : 'Using the new version. The previous drafts were archived, not deleted.');
     }

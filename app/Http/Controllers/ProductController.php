@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\BulkProductActionRequest;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Resources\LeadResource;
@@ -17,6 +18,8 @@ use Inertia\Response;
 
 class ProductController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function index(Request $request): Response
     {
         $filters = $request->only(['search', 'category', 'active']);
@@ -69,7 +72,7 @@ class ProductController extends Controller
     {
         $product = Product::create($request->validated());
 
-        return to_route('products.show', $product)
+        return $this->backTo('products.index')
             ->with('success', "Product \"{$product->name}\" created.");
     }
 
@@ -77,7 +80,7 @@ class ProductController extends Controller
     {
         $product->update($request->validated());
 
-        return back()->with('success', "Product \"{$product->name}\" updated.");
+        return $this->backTo('products.index')->with('success', "Product \"{$product->name}\" updated.");
     }
 
     public function destroy(Product $product): RedirectResponse
@@ -101,7 +104,7 @@ class ProductController extends Controller
             $request->clear(),
         );
 
-        return back()->with(
+        return $this->backTo('products.index')->with(
             $changed > 0 ? 'success' : 'error',
             $changed > 0
                 ? "Updated {$changed} product(s)."
@@ -113,7 +116,7 @@ class ProductController extends Controller
     {
         $deleted = $editor->delete(Product::class, $request->ids());
 
-        return back()->with(
+        return $this->backTo('products.index')->with(
             'success',
             "Deleted {$deleted} product(s), along with any lead opportunities using them."
         );

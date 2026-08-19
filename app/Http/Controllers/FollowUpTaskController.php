@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\FollowUpStatus;
 use App\Enums\Priority;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\StoreFollowUpTaskRequest;
 use App\Models\FollowUpTask;
 use App\Models\Lead;
@@ -24,6 +25,8 @@ use Inertia\Response;
  */
 class FollowUpTaskController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function index(Request $request): Response
     {
         $filters = $request->only(['status', 'source', 'due']);
@@ -95,14 +98,14 @@ class FollowUpTaskController extends Controller
             'source' => FollowUpTask::SOURCE_MANUAL,
         ]);
 
-        return back()->with('success', 'Follow-up added.');
+        return $this->backTo('follow-ups.index')->with('success', 'Follow-up added.');
     }
 
     public function update(StoreFollowUpTaskRequest $request, FollowUpTask $task): RedirectResponse
     {
         $task->update($request->validated());
 
-        return back()->with('success', 'Follow-up updated.');
+        return $this->backTo('follow-ups.index')->with('success', 'Follow-up updated.');
     }
 
     public function complete(FollowUpTask $task): RedirectResponse
@@ -112,7 +115,7 @@ class FollowUpTaskController extends Controller
             'completed_at' => now(),
         ]);
 
-        return back()->with('success', 'Marked done.');
+        return $this->backTo('follow-ups.index')->with('success', 'Marked done.');
     }
 
     /**
@@ -129,7 +132,7 @@ class FollowUpTaskController extends Controller
             'completed_at' => null,
         ]);
 
-        return back()->with('success', 'Dismissed.');
+        return $this->backTo('follow-ups.index')->with('success', 'Dismissed.');
     }
 
     public function reopen(FollowUpTask $task): RedirectResponse
@@ -139,14 +142,14 @@ class FollowUpTaskController extends Controller
             'completed_at' => null,
         ]);
 
-        return back()->with('success', 'Reopened.');
+        return $this->backTo('follow-ups.index')->with('success', 'Reopened.');
     }
 
     public function destroy(FollowUpTask $task): RedirectResponse
     {
         $task->delete();
 
-        return back()->with('success', 'Follow-up deleted.');
+        return $this->backTo('follow-ups.index')->with('success', 'Follow-up deleted.');
     }
 
     /** @return array<string, mixed> */

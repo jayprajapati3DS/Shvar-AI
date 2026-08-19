@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Enums\ReplyClassification;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Models\EmailReply;
 use App\Services\AI\Exceptions\AiException;
 use App\Services\Email\Outlook\OutlookException;
@@ -24,6 +25,8 @@ use Inertia\Response;
  */
 class EmailReplyController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         private readonly OutlookMailboxSync $sync,
         private readonly ReplyClassifier $classifier,
@@ -71,7 +74,7 @@ class EmailReplyController extends Controller
             $result = $this->sync->sync();
             $promoted = $this->sync->reconcileQueued();
         } catch (OutlookException $e) {
-            return back()->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
+            return $this->backTo('replies.index')->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
         }
 
         $message = $result['message'];
@@ -83,7 +86,7 @@ class EmailReplyController extends Controller
             );
         }
 
-        return back()->with($result['imported'] > 0 ? 'success' : 'info', $message);
+        return $this->backTo('replies.index')->with($result['imported'] > 0 ? 'success' : 'info', $message);
     }
 
     /** Have the local model read one reply and suggest what to do. */
@@ -92,12 +95,12 @@ class EmailReplyController extends Controller
         try {
             $outcome = $this->classifier->classify($reply);
         } catch (AiException $e) {
-            return back()->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
+            return $this->backTo('replies.index')->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
         }
 
         $classification = $outcome['reply']->classification;
 
-        return back()->with('success', sprintf(
+        return $this->backTo('replies.index')->with('success', sprintf(
             'Read as "%s".%s',
             $classification?->value ?? 'Unclear',
             $outcome['task'] !== null
@@ -111,7 +114,7 @@ class EmailReplyController extends Controller
     {
         $reply->update(['reviewed_at' => now()]);
 
-        return back()->with('success', 'Marked as reviewed.');
+        return $this->backTo('replies.index')->with('success', 'Marked as reviewed.');
     }
 
     public function destroy(EmailReply $reply): RedirectResponse
@@ -119,7 +122,7 @@ class EmailReplyController extends Controller
         // Deletes the local copy only. The message stays in Outlook.
         $reply->delete();
 
-        return back()->with('success', 'Removed from Shvar. The email is untouched in Outlook.');
+        return $this->backTo('replies.index')->with('success', 'Removed from Shvar. The email is untouched in Outlook.');
     }
 
     /** @return array<string, mixed> */

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Resources\CompanyAnalysisResource;
 use App\Models\Company;
 use App\Models\CompanyAnalysis;
@@ -27,6 +28,8 @@ use Illuminate\Validation\Rule;
  */
 class CompanyResearchController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         private readonly CompanyResearcher $researcher,
     ) {}
@@ -40,7 +43,7 @@ class CompanyResearchController extends Controller
     public function store(Request $request, Company $company): RedirectResponse
     {
         if (! $this->researcher->enabled()) {
-            return back()->with(
+            return $this->backTo('companies.show', $company->id)->with(
                 'error',
                 'Website research is switched off. Set RESEARCH_FETCH_ENABLED=true in .env to enable it.',
             );
@@ -55,7 +58,7 @@ class CompanyResearchController extends Controller
         $url = $validated['url'] ?? $company->website;
 
         if (blank($url)) {
-            return back()->withErrors([
+            return $this->backTo('companies.show', $company->id)->withErrors([
                 'url' => 'Add a website address for this company first - research reads the site rather than guessing.',
             ]);
         }
@@ -64,20 +67,20 @@ class CompanyResearchController extends Controller
             $analysis = $this->researcher->research($company, $url);
         } catch (ResearchException|AiException $e) {
             // The AI attempt, if it got that far, is already in the local log.
-            return back()->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
+            return $this->backTo('companies.show', $company->id)->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
         }
 
         $found = count((array) $analysis->findings);
 
         if ($found === 0) {
-            return back()->with(
+            return $this->backTo('companies.show', $company->id)->with(
                 'info',
                 'The page was read, but nothing on it could be verified as a company fact. '
                 .'Sites built entirely in JavaScript often look empty to a simple fetch.',
             );
         }
 
-        return back()->with('success', sprintf(
+        return $this->backTo('companies.show', $company->id)->with('success', sprintf(
             'Read %s and found %d verified detail(s). Review them before they are saved.',
             $analysis->requested_url,
             $found,
@@ -101,10 +104,10 @@ class CompanyResearchController extends Controller
         $applied = $this->researcher->apply($analysis, $validated['fields']);
 
         if ($applied === []) {
-            return back()->with('error', 'None of those fields were available in that analysis.');
+            return $this->backTo('companies.show', $company->id)->with('error', 'None of those fields were available in that analysis.');
         }
 
-        return back()->with('success', sprintf(
+        return $this->backTo('companies.show', $company->id)->with('success', sprintf(
             'Saved %d field(s) to %s: %s.',
             count($applied),
             $company->name,
@@ -129,6 +132,6 @@ class CompanyResearchController extends Controller
 
         $analysis->delete();
 
-        return back()->with('success', 'Research run discarded.');
+        return $this->backTo('companies.show', $company->id)->with('success', 'Research run discarded.');
     }
 }

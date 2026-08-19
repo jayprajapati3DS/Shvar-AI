@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Settings;
 
 use App\Enums\AiRequestType;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RunAiPromptRequest;
 use App\Services\AI\AIServiceInterface;
@@ -25,6 +26,8 @@ use Inertia\Response;
  */
 class AiPlaygroundController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         private readonly AIServiceInterface $ai,
         private readonly AiSettings $settings,
@@ -58,7 +61,7 @@ class AiPlaygroundController extends Controller
         // A per-run model override must still be something installed locally.
         // Without this, a typo would surface as a confusing 404 from Ollama.
         if (isset($options['model']) && ! $this->ai->hasModel((string) $options['model'])) {
-            return back()
+            return $this->backTo('settings.ai.playground')
                 ->withInput()
                 ->withErrors(['model' => 'That model is not installed locally.']);
         }
@@ -71,7 +74,7 @@ class AiPlaygroundController extends Controller
                 : $this->ai->generate($template, AiRequestType::General, $options);
         } catch (AiException $e) {
             // The attempt is already in the local log; the user sees plain language.
-            return back()
+            return $this->backTo('settings.ai.playground')
                 ->withInput()
                 ->with('error', trim($e->userMessage().' '.($e->hint() ?? '')));
         }

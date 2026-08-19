@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\EmailDraftStatus;
 use App\Enums\EmailVariant;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\UpdateEmailDraftRequest;
 use App\Http\Resources\EmailDraftResource;
 use App\Models\Company;
@@ -31,6 +32,8 @@ use Inertia\Response;
  */
 class EmailDraftController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         private readonly EmailDraftEditor $editor,
         private readonly EmailQualityChecker $quality,
@@ -143,7 +146,7 @@ class EmailDraftController extends Controller
     public function update(UpdateEmailDraftRequest $request, EmailDraft $draft): RedirectResponse
     {
         if (! $draft->isEditable()) {
-            return back()->with('error', sprintf(
+            return $this->backTo('email-drafts.index')->with('error', sprintf(
                 'A draft with status "%s" can no longer be edited.',
                 $draft->status->value,
             ));
@@ -157,7 +160,7 @@ class EmailDraftController extends Controller
             (string) $request->input('body'),
         );
 
-        return back()->with('success', $draft->refresh()->status !== $before
+        return $this->backTo('email-drafts.index')->with('success', $draft->refresh()->status !== $before
             ? 'Saved. This draft is now marked as user edited.'
             : 'Saved.');
     }
@@ -181,14 +184,14 @@ class EmailDraftController extends Controller
     {
         $this->editor->reject($draft);
 
-        return back()->with('success', 'Rejected. The draft is kept in the history.');
+        return $this->backTo('email-drafts.index')->with('success', 'Rejected. The draft is kept in the history.');
     }
 
     public function archive(EmailDraft $draft): RedirectResponse
     {
         $this->editor->archive($draft);
 
-        return back()->with('success', 'Archived.');
+        return $this->backTo('email-drafts.index')->with('success', 'Archived.');
     }
 
     /**
@@ -201,16 +204,16 @@ class EmailDraftController extends Controller
     public function send(EmailDraft $draft): RedirectResponse
     {
         if (! (bool) config('email.allow_test_send', false)) {
-            return back()->with('error', 'Test send is disabled in this environment.');
+            return $this->backTo('email-drafts.index')->with('error', 'Test send is disabled in this environment.');
         }
 
         $outcome = $this->editor->send($draft);
 
         if (! $outcome['sent']) {
-            return back()->with('error', $outcome['reason']);
+            return $this->backTo('email-drafts.index')->with('error', $outcome['reason']);
         }
 
-        return back()->with('success', $outcome['result']?->simulated
+        return $this->backTo('email-drafts.index')->with('success', $outcome['result']?->simulated
             ? 'Simulated email sent successfully. Nothing left this machine - the message was written '
                 .'to the local log.'
             : 'Email sent.');

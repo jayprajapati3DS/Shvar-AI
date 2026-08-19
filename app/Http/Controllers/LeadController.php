@@ -9,6 +9,7 @@ use App\Enums\LeadSource;
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
 use App\Enums\RecommendationStatus;
+use App\Http\Controllers\Concerns\RedirectsToOrigin;
 use App\Http\Requests\BulkLeadActionRequest;
 use App\Http\Requests\StoreLeadRequest;
 use App\Http\Resources\EmailDraftResource;
@@ -33,6 +34,8 @@ use Inertia\Response;
 
 class LeadController extends Controller
 {
+    use RedirectsToOrigin;
+
     public function __construct(
         // Only used to tell the lead page whether AI is available, so the
         // Analyze button can explain itself when it is not.
@@ -140,7 +143,12 @@ class LeadController extends Controller
             "Status set to {$lead->lead_status->value}."
         );
 
-        return to_route('leads.show', $lead)->with('success', 'Lead created.');
+        // Back to the list you added from, not off to the new record. Adding
+        // three people to one company should not mean navigating back twice.
+        return $this->backTo('leads.index')->with('success', sprintf(
+            'Lead created: %s.',
+            $lead->full_name,
+        ));
     }
 
     public function update(StoreLeadRequest $request, Lead $lead): RedirectResponse
@@ -159,14 +167,17 @@ class LeadController extends Controller
             );
         }
 
-        return back()->with('success', 'Lead updated.');
+        return $this->backTo('leads.index')->with('success', 'Lead updated.');
     }
 
     public function destroy(Lead $lead): RedirectResponse
     {
         $lead->delete();
 
-        return to_route('leads.index')->with('success', 'Lead deleted.');
+        return $this->backFromDelete(
+            route('leads.show', $lead),
+            'leads.index',
+        )->with('success', 'Lead deleted.');
     }
 
     /**
@@ -203,7 +214,7 @@ class LeadController extends Controller
             },
         );
 
-        return back()->with(
+        return $this->backTo('leads.index')->with(
             $changed > 0 ? 'success' : 'error',
             $changed > 0
                 ? "Updated {$changed} lead(s)."
@@ -215,7 +226,7 @@ class LeadController extends Controller
     {
         $deleted = $editor->delete(Lead::class, $request->ids());
 
-        return back()->with('success', "Deleted {$deleted} lead(s).");
+        return $this->backTo('leads.index')->with('success', "Deleted {$deleted} lead(s).");
     }
 
     /**
