@@ -11,7 +11,9 @@ use App\Enums\RecommendationType;
 use App\Models\Lead;
 use App\Models\LeadAnalysis;
 use App\Models\LeadProductMatch;
+use App\Services\AI\AiResult;
 use App\Services\AI\AIServiceInterface;
+use App\Services\AI\Exceptions\AiException;
 use App\Services\AI\PromptLibrary;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -66,7 +68,7 @@ class AiProductMatcher implements ProductMatcher
      * Run one analysis and persist it, returning the analysis with its
      * recommendations loaded.
      *
-     * @throws \App\Services\AI\Exceptions\AiException
+     * @throws AiException
      */
     public function analyse(Lead $lead): LeadAnalysis
     {
@@ -104,10 +106,10 @@ class AiProductMatcher implements ProductMatcher
     private function persist(
         Lead $lead,
         array $validated,
-        \App\Services\AI\AiResult $result,
+        AiResult $result,
         float $evidenceStrength,
     ): LeadAnalysis {
-        return DB::transaction(function () use ($lead, $validated, $result, $evidenceStrength): LeadAnalysis {
+        return DB::transaction(function () use ($lead, $validated, $result): LeadAnalysis {
             // Anything the model got wrong is recorded alongside what it got
             // right, so the user can see the output was filtered.
             $missing = $validated['missing_information'];

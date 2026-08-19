@@ -20,6 +20,7 @@ enum AiRequestType: string
     case ProductRecommendation = 'product_recommendation';
     case EmailGeneration = 'email_generation';
     case FollowUpGeneration = 'follow_up_generation';
+    case ReplyClassification = 'reply_classification';
 
     public function label(): string
     {
@@ -29,6 +30,7 @@ enum AiRequestType: string
             self::ProductRecommendation => 'Product Recommendation',
             self::EmailGeneration => 'Email Generation',
             self::FollowUpGeneration => 'Follow-up Generation',
+            self::ReplyClassification => 'Reply Classification',
         };
     }
 
@@ -40,6 +42,7 @@ enum AiRequestType: string
             self::ProductRecommendation => 'indigo',
             self::EmailGeneration => 'violet',
             self::FollowUpGeneration => 'amber',
+            self::ReplyClassification => 'emerald',
         };
     }
 
@@ -54,7 +57,12 @@ enum AiRequestType: string
      */
     public static function implementedCases(): array
     {
-        return [self::General, self::ProductRecommendation, self::EmailGeneration];
+        return [
+            self::General,
+            self::ProductRecommendation,
+            self::EmailGeneration,
+            self::ReplyClassification,
+        ];
     }
 
     public function isImplemented(): bool

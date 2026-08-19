@@ -9,6 +9,8 @@ use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmailDraftController;
 use App\Http\Controllers\EmailGenerationController;
+use App\Http\Controllers\EmailReplyController;
+use App\Http\Controllers\FollowUpTaskController;
 use App\Http\Controllers\ImportController;
 use App\Http\Controllers\LeadAnalysisController;
 use App\Http\Controllers\LeadController;
@@ -193,9 +195,35 @@ Route::prefix('settings')->name('settings.')->group(function (): void {
     Route::delete('ai/logs', [AiLogController::class, 'clear'])->name('ai.logs.clear');
 });
 
-// ---- Remaining placeholders ----------------------------------------------
+// ---- Replies and follow-ups ----------------------------------------------
 //
-// Email Drafts graduated to a real module in Phase 4, so only two stubs remain.
+// Reading the Outlook inbox is a DELIBERATE action, not a background poll -
+// hence a POST you press rather than a schedule that runs. Only messages whose
+// sender matches a Contact record are ever opened; OutlookMailboxSync owns that
+// scope and nothing else in the mailbox is touched.
 
-Route::get('follow-ups', [PlaceholderController::class, 'followUps'])->name('follow-ups.index');
+Route::get('replies', [EmailReplyController::class, 'index'])->name('replies.index');
+Route::post('replies/sync', [EmailReplyController::class, 'store'])->name('replies.sync');
+Route::post('replies/{reply}/classify', [EmailReplyController::class, 'classify'])
+    ->name('replies.classify');
+Route::post('replies/{reply}/review', [EmailReplyController::class, 'review'])
+    ->name('replies.review');
+Route::delete('replies/{reply}', [EmailReplyController::class, 'destroy'])->name('replies.destroy');
+
+// Follow-ups. A task is a reminder with a date - nothing here sends, schedules
+// or generates anything, and an overdue one does not chase anybody.
+Route::get('follow-ups', [FollowUpTaskController::class, 'index'])->name('follow-ups.index');
+Route::post('follow-ups', [FollowUpTaskController::class, 'store'])->name('follow-ups.store');
+Route::put('follow-ups/{task}', [FollowUpTaskController::class, 'update'])->name('follow-ups.update');
+Route::delete('follow-ups/{task}', [FollowUpTaskController::class, 'destroy'])->name('follow-ups.destroy');
+Route::post('follow-ups/{task}/complete', [FollowUpTaskController::class, 'complete'])
+    ->name('follow-ups.complete');
+Route::post('follow-ups/{task}/dismiss', [FollowUpTaskController::class, 'dismiss'])
+    ->name('follow-ups.dismiss');
+Route::post('follow-ups/{task}/reopen', [FollowUpTaskController::class, 'reopen'])
+    ->name('follow-ups.reopen');
+
+// ---- Remaining placeholder -----------------------------------------------
+//
+// Email Drafts graduated in Phase 4 and Follow-ups just now, so one stub remains.
 Route::get('knowledge-base', [PlaceholderController::class, 'knowledgeBase'])->name('knowledge-base.index');

@@ -63,7 +63,7 @@ class OllamaServiceTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Wiring                                                          */
+    /* Wiring */
     /* ---------------------------------------------------------------- */
 
     public function test_the_container_binds_the_ollama_implementation(): void
@@ -84,7 +84,7 @@ class OllamaServiceTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Availability + model discovery                                  */
+    /* Availability + model discovery */
     /* ---------------------------------------------------------------- */
 
     public function test_is_available_is_true_when_ollama_answers(): void
@@ -146,7 +146,7 @@ class OllamaServiceTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Status snapshot                                                 */
+    /* Status snapshot */
     /* ---------------------------------------------------------------- */
 
     public function test_status_reports_connected_and_installed_when_all_is_well(): void
@@ -199,7 +199,7 @@ class OllamaServiceTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Successful generation                                           */
+    /* Successful generation */
     /* ---------------------------------------------------------------- */
 
     public function test_generate_returns_the_completion(): void
@@ -278,7 +278,7 @@ class OllamaServiceTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Failure modes                                                   */
+    /* Failure modes */
     /* ---------------------------------------------------------------- */
 
     public function test_a_refused_connection_raises_ai_unavailable(): void
@@ -390,7 +390,7 @@ class OllamaServiceTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Reasoning ("thinking") models                                   */
+    /* Reasoning ("thinking") models */
     /* ---------------------------------------------------------------- */
 
     public function test_a_structured_request_suppresses_model_thinking(): void

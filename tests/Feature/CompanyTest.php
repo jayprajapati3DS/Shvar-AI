@@ -7,6 +7,7 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Lead;
+use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -90,7 +91,7 @@ class CompanyTest extends TestCase
         $contact = Contact::factory()->create(['company_id' => $company->id]);
         $lead = Lead::factory()->create(['company_id' => $company->id, 'contact_id' => $contact->id]);
 
-        $product = \App\Models\Product::factory()->create(['name' => 'MySegmenter Test']);
+        $product = Product::factory()->create(['name' => 'MySegmenter Test']);
         $lead->productMatches()->create(['product_id' => $product->id]);
 
         $this->get(route('companies.show', $company))

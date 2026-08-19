@@ -57,7 +57,7 @@ class AiPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Navigation                                                      */
+    /* Navigation */
     /* ---------------------------------------------------------------- */
 
     public function test_settings_redirects_to_the_ai_page(): void
@@ -66,7 +66,7 @@ class AiPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* AI Configuration                                                */
+    /* AI Configuration */
     /* ---------------------------------------------------------------- */
 
     public function test_the_configuration_page_renders_when_ollama_is_ready(): void
@@ -84,7 +84,7 @@ class AiPagesTest extends TestCase
                 ->where('settings.provider', 'ollama')
                 ->where('settings.endpoint_is_read_only', true)
                 ->has('status.installed_models', 1)
-                ->has('requestTypes', 5)
+                ->has('requestTypes', 6)
                 ->has('stats')
                 ->has('defaults.system_prompt'));
     }
@@ -130,7 +130,7 @@ class AiPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Connection test                                                 */
+    /* Connection test */
     /* ---------------------------------------------------------------- */
 
     public function test_the_connection_test_reports_success_with_a_response_time(): void
@@ -190,7 +190,7 @@ class AiPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Playground                                                      */
+    /* Playground */
     /* ---------------------------------------------------------------- */
 
     public function test_the_playground_renders_with_no_result(): void
@@ -312,7 +312,7 @@ class AiPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Logs                                                            */
+    /* Logs */
     /* ---------------------------------------------------------------- */
 
     public function test_the_logs_page_renders_when_empty(): void

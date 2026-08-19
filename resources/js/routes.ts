@@ -130,7 +130,25 @@ export const routes = {
         send: (id: number) => `/email-drafts/${id}/send`,
     },
 
-    followUps: () => '/follow-ups',
+    // Replies received in Outlook from CRM contacts. Sync is a POST you press,
+    // never a background poll.
+    replies: {
+        index: (q?: Query) => withQuery('/replies', q),
+        sync: () => '/replies/sync',
+        classify: (id: number) => `/replies/${id}/classify`,
+        review: (id: number) => `/replies/${id}/review`,
+        destroy: (id: number) => `/replies/${id}`,
+    },
+
+    followUps: {
+        index: (q?: Query) => withQuery('/follow-ups', q),
+        store: () => '/follow-ups',
+        update: (id: number) => `/follow-ups/${id}`,
+        destroy: (id: number) => `/follow-ups/${id}`,
+        complete: (id: number) => `/follow-ups/${id}/complete`,
+        dismiss: (id: number) => `/follow-ups/${id}/dismiss`,
+        reopen: (id: number) => `/follow-ups/${id}/reopen`,
+    },
     knowledgeBase: () => '/knowledge-base',
 
     settings: {

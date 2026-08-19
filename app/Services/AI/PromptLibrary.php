@@ -453,6 +453,104 @@ class PromptLibrary
     }
 
     /**
+     * The reply-reading system prompt.
+     *
+     * A different failure mode again. Product recommendation risks forcing a
+     * match; company research risks answering from memory; email writing risks
+     * flattery. Reading a reply risks OPTIMISM - a model asked "are they
+     * interested" finds interest in "thanks, not right now", because agreeing
+     * is what it was trained to do.
+     *
+     * That matters more than it sounds. An over-read reply produces a follow-up
+     * task, which produces another email, to someone who already said no. The
+     * rules below push the other way: when in doubt say Unclear, and treat a
+     * soft no as a no.
+     */
+    public const REPLY_CLASSIFICATION_SYSTEM_PROMPT = <<<'PROMPT'
+        You read replies to sales outreach and say plainly what they mean.
+
+        You are reading one email. You are not writing one, and you are not selling anything.
+
+        Rules:
+
+        - Report what the message SAYS, not what would be convenient. If someone declines, say so.
+        - British and Indian business English is indirect. "We will keep this on file", "perhaps later
+          in the year", "I will revert" and "let me check internally" are POLITE DEFERRALS, not
+          interest. Classify them as "Not now".
+        - "Interested" requires something concrete: they ask for a demo, a call, pricing, documents,
+          or say yes. Curiosity about what you do is a Question, not interest.
+        - A one-line "thanks" with no request is Unclear, not Interested.
+        - If the message is an automatic out-of-office, say so and nothing more. Do not read intent
+          into an auto-reply.
+        - If someone asks not to be contacted, in any wording, that is Unsubscribe. Never soften it.
+        - If the message says it has reached the wrong person, or names someone else to talk to,
+          that is Wrong person.
+        - When you genuinely cannot tell, answer Unclear. That is a correct answer and it is far more
+          useful than a confident wrong one.
+
+        On the follow-up you suggest:
+
+        - Suggest an ACTION, not a sentiment. "Send the planning workflow overview she asked for" is
+          useful; "nurture the relationship" is not.
+        - Base it only on what the reply asks for or implies. Do not invent a next step they did not
+          hint at.
+        - If they asked a question, the follow-up is answering it.
+        - If they declined or asked to stop, suggest NOTHING. Leave the follow-up empty.
+        - Never suggest contacting someone again sooner than they indicated.
+
+        Quote the reply for anything you assert about it. If you cannot quote it, do not assert it.
+        PROMPT;
+
+    /**
+     * Build the reply-classification prompt.
+     *
+     * The reply text is a real message from a real person, passed through from
+     * the local Outlook mailbox. It goes to the local model and nowhere else.
+     */
+    public function replyClassification(
+        string $replyBody,
+        string $context,
+        string $classifications,
+    ): PromptTemplate {
+        return new PromptTemplate(
+            name: 'reply_classification',
+            template: <<<'PROMPT'
+                Read this reply and tell me what it means.
+
+                {{ context }}
+
+                === THE REPLY I RECEIVED ===
+
+                {{ reply }}
+
+                === END OF REPLY ===
+
+                === TASK ===
+
+                1. classification - exactly one of: {{ classifications }}
+                2. summary - one or two sentences on what they actually said. Plain, not upbeat.
+                3. quotes - the sentences from the reply that justify your classification. Copy them
+                   verbatim. If you cannot quote it, do not claim it.
+                4. asks - anything they specifically requested. Empty list if nothing.
+                5. mentioned_dates - any date, month or timeframe they named, as they wrote it.
+                   Empty list if none.
+                6. follow_up - a concrete next action, and how many days to wait. Leave the title
+                   empty if they declined, asked to stop, or if there is genuinely nothing to do.
+
+                Do not be encouraging. A polite brush-off is a brush-off, and telling me otherwise
+                wastes my time and theirs.
+
+                Return ONLY the JSON object. No commentary, no code fence.
+                PROMPT,
+            system: self::REPLY_CLASSIFICATION_SYSTEM_PROMPT,
+        )->with([
+            'reply' => $replyBody,
+            'context' => $context,
+            'classifications' => $classifications,
+        ]);
+    }
+
+    /**
      * A structured-output probe, used by the Playground's JSON mode and by tests.
      */
     public function structuredProbe(): PromptTemplate

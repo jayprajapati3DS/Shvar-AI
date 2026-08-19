@@ -109,7 +109,7 @@ class EmailPrivacyTest extends TestCase
         $this->assertTrue($service->isSimulated());
     }
 
-    public function test_only_the_two_known_transports_exist(): void
+    public function test_only_the_known_transports_exist(): void
     {
         $implementations = [];
 
@@ -121,11 +121,51 @@ class EmailPrivacyTest extends TestCase
 
         sort($implementations);
 
-        // This list grew by one when SMTP was added, which is exactly what this
-        // test is for: adding a transport is the moment real email can leave the
-        // machine, and it should not be possible to do it quietly. A third
-        // implementation trips this again.
-        $this->assertSame(['LocalTestEmailService', 'SmtpEmailService'], $implementations);
+        // This list has grown twice - once for SMTP, once for Outlook - and it
+        // tripped this test both times, which is exactly what it is for. Adding
+        // a transport is the moment mail can reach a real person, and it should
+        // not be possible to do it quietly.
+        $this->assertSame(
+            ['LocalTestEmailService', 'OutlookEmailService', 'SmtpEmailService'],
+            $implementations,
+        );
+    }
+
+    public function test_reading_the_mailbox_is_scoped_to_crm_contacts(): void
+    {
+        // The scope lives in OutlookMailboxSync and it is the narrowest part of
+        // the whole feature: the mailbox holds thousands of unrelated messages.
+        // Asserted against the source so a future change that widens it has to
+        // be deliberate.
+        $sync = (string) file_get_contents(app_path('Services/Email/Outlook/OutlookMailboxSync.php'));
+
+        $this->assertStringContainsString('contactsByAddress', $sync);
+        $this->assertStringContainsString('whereNotNull(\'email\')', $sync);
+
+        // The gateway is only ever asked for messages from an explicit address
+        // list - there is no "fetch everything" call anywhere.
+        $gateway = (string) file_get_contents(
+            app_path('Services/Email/Outlook/OutlookGatewayInterface.php')
+        );
+
+        $this->assertStringContainsString('inboxFrom(array $addresses', $gateway);
+    }
+
+    public function test_nothing_reads_the_mailbox_on_a_schedule(): void
+    {
+        // Reading someone's mail should be something they asked for and can see
+        // happening. A timer quietly opening messages is a different thing from
+        // a button that reports what it did.
+        foreach ($this->sources() as $path => $contents) {
+            if (! str_contains($contents, 'OutlookMailboxSync')) {
+                continue;
+            }
+
+            $this->assertStringNotContainsString('everyMinute', $contents, "in {$path}");
+            $this->assertStringNotContainsString('everyFiveMinutes', $contents, "in {$path}");
+            $this->assertStringNotContainsString('hourly()', $contents, "in {$path}");
+            $this->assertStringNotContainsString('Schedule ', $contents, "in {$path}");
+        }
     }
 
     public function test_smtp_is_never_reachable_without_changing_the_driver(): void

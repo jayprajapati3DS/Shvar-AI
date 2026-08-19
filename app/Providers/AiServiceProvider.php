@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Contracts\Ai\ProductMatcher;
-use App\Services\AI\AIServiceInterface;
 use App\Services\AI\AiRequestLogger;
+use App\Services\AI\AIServiceInterface;
 use App\Services\AI\AiSettings;
 use App\Services\AI\LocalEndpointGuard;
 use App\Services\AI\OllamaAIService;

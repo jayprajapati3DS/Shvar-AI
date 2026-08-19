@@ -222,24 +222,37 @@ class EmailDraftEditor
         }
 
         DB::transaction(function () use ($draft, $result): void {
+            // A handed-off message has NOT been sent - it is sitting in an
+            // Outlook window waiting for a human to press Send. Marking it Sent
+            // here would put a lie in the timeline, so it becomes Queued and
+            // OutlookReconciler promotes it once it really goes.
             $draft->update([
-                'status' => EmailDraftStatus::Sent,
-                'sent_at' => now(),
+                'status' => $result->handedOff
+                    ? EmailDraftStatus::Queued
+                    : EmailDraftStatus::Sent,
+                'sent_at' => $result->handedOff ? null : now(),
                 'delivery_mode' => $result->mode,
+                'delivery_reference' => $result->reference,
                 'delivery_error' => null,
             ]);
 
             Activity::record(
                 $draft->lead,
                 ActivityType::Email,
-                $result->simulated ? 'Simulated email send' : 'Email sent',
+                match (true) {
+                    $result->handedOff => 'Email opened in Outlook',
+                    $result->simulated => 'Simulated email send',
+                    default => 'Email sent',
+                },
                 sprintf(
                     '"%s" to %s.%s',
                     $draft->subject,
                     $result->recipient,
-                    $result->simulated
-                        ? ' Simulated - nothing left this machine.'
-                        : ' Delivered over '.$result->mode.'. This one was real.',
+                    match (true) {
+                        $result->handedOff => ' Waiting for you to press Send in Outlook.',
+                        $result->simulated => ' Simulated - nothing left this machine.',
+                        default => ' Delivered over '.$result->mode.'. This one was real.',
+                    },
                 ),
             );
         });

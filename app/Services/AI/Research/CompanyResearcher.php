@@ -8,8 +8,10 @@ use App\Enums\AiRequestType;
 use App\Models\Company;
 use App\Models\CompanyAnalysis;
 use App\Services\AI\AIServiceInterface;
+use App\Services\AI\Exceptions\AiException;
 use App\Services\AI\PromptLibrary;
 use App\Services\Research\Exceptions\FetchFailedException;
+use App\Services\Research\Exceptions\UnsafeUrlException;
 use App\Services\Research\HtmlTextExtractor;
 use App\Services\Research\WebsiteFetcher;
 
@@ -56,8 +58,8 @@ class CompanyResearcher
     /**
      * Fetch the site, read it, and store the findings for review.
      *
-     * @throws FetchFailedException|\App\Services\Research\Exceptions\UnsafeUrlException
-     * @throws \App\Services\AI\Exceptions\AiException
+     * @throws FetchFailedException|UnsafeUrlException
+     * @throws AiException
      */
     public function research(Company $company, ?string $url = null): CompanyAnalysis
     {
@@ -112,7 +114,7 @@ class CompanyResearcher
      * when the user asks. Fields not listed are left exactly as they were.
      *
      * @param  list<string>  $fields
-     * @return list<string>  the fields actually written
+     * @return list<string> the fields actually written
      */
     public function apply(CompanyAnalysis $analysis, array $fields): array
     {

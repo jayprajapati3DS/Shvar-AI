@@ -8,6 +8,7 @@ use App\Enums\LeadStatus;
 use App\Enums\Priority;
 use App\Models\Concerns\BulkEditable;
 use App\Models\Concerns\HasActivities;
+use Database\Factories\LeadFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,7 +22,7 @@ class Lead extends Model
     use BulkEditable;
     use HasActivities;
 
-    /** @use HasFactory<\Database\Factories\LeadFactory> */
+    /** @use HasFactory<LeadFactory> */
     use HasFactory;
 
     protected $fillable = [

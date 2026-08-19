@@ -138,7 +138,7 @@ class ProductRecommendationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Happy path                                                      */
+    /* Happy path */
     /* ---------------------------------------------------------------- */
 
     public function test_it_produces_an_analysis_with_recommendations(): void
@@ -210,7 +210,7 @@ class ProductRecommendationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Request wiring                                                  */
+    /* Request wiring */
     /* ---------------------------------------------------------------- */
 
     public function test_it_sends_the_portfolio_and_lead_data_and_nothing_else(): void
@@ -281,7 +281,7 @@ class ProductRecommendationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Logging                                                         */
+    /* Logging */
     /* ---------------------------------------------------------------- */
 
     public function test_the_request_is_logged_against_the_lead(): void
@@ -303,7 +303,7 @@ class ProductRecommendationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* History                                                         */
+    /* History */
     /* ---------------------------------------------------------------- */
 
     public function test_re_analysing_adds_history_rather_than_replacing_it(): void
@@ -338,7 +338,7 @@ class ProductRecommendationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Failure modes                                                   */
+    /* Failure modes */
     /* ---------------------------------------------------------------- */
 
     public function test_ollama_unavailable_raises_and_writes_no_analysis(): void

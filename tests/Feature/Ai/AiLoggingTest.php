@@ -12,6 +12,7 @@ use App\Services\AI\Exceptions\AiException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -179,7 +180,7 @@ class AiLoggingTest extends TestCase
         $this->fakeSuccess('Answer regardless.');
 
         // Drop the table so the insert fails, simulating a broken local DB.
-        \Illuminate\Support\Facades\Schema::drop('ai_requests');
+        Schema::drop('ai_requests');
 
         $result = $this->ai()->generate('Hello');
 

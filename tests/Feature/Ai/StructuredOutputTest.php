@@ -43,7 +43,7 @@ class StructuredOutputTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* End-to-end through the service                                  */
+    /* End-to-end through the service */
     /* ---------------------------------------------------------------- */
 
     public function test_it_decodes_a_clean_json_object(): void
@@ -129,7 +129,7 @@ class StructuredOutputTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Parser recovery, unit level                                     */
+    /* Parser recovery, unit level */
     /* ---------------------------------------------------------------- */
 
     public function test_the_parser_strips_a_json_code_fence(): void

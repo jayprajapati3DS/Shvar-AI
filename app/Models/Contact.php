@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Models\Concerns\BulkEditable;
 use App\Models\Concerns\HasActivities;
+use Database\Factories\ContactFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +19,7 @@ class Contact extends Model
     use BulkEditable;
     use HasActivities;
 
-    /** @use HasFactory<\Database\Factories\ContactFactory> */
+    /** @use HasFactory<ContactFactory> */
     use HasFactory;
 
     protected $fillable = [

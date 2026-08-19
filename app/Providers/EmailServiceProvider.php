@@ -10,6 +10,9 @@ use App\Services\Email\EmailServiceInterface;
 use App\Services\Email\EmailSettings;
 use App\Services\Email\EmailStyleProfile;
 use App\Services\Email\LocalTestEmailService;
+use App\Services\Email\Outlook\ComOutlookGateway;
+use App\Services\Email\Outlook\OutlookGatewayInterface;
+use App\Services\Email\OutlookEmailService;
 use App\Services\Email\RecipientAllowlist;
 use App\Services\Email\SmtpEmailService;
 use App\Services\Email\SmtpSettings;
@@ -38,6 +41,11 @@ class EmailServiceProvider extends ServiceProvider
         $this->app->singleton(EmailRenderer::class);
         $this->app->singleton(EmailQualityChecker::class);
         $this->app->singleton(EmailStyleProfile::class);
+
+        // The COM boundary. Bound here so tests can swap in
+        // FakeOutlookGateway and cover everything above it without
+        // Windows, a MAPI profile or a signed-in user.
+        $this->app->singleton(OutlookGatewayInterface::class, ComOutlookGateway::class);
         $this->app->singleton(SmtpSettings::class);
         $this->app->singleton(RecipientAllowlist::class);
 
@@ -58,6 +66,15 @@ class EmailServiceProvider extends ServiceProvider
                     $app->make(RecipientAllowlist::class),
                 ),
 
+                // Hands the message to the Outlook desktop app on this
+                // machine and stops. The human presses Send there, so this one
+                // does not deliver - it hands off, and the draft becomes Queued.
+                'outlook' => new OutlookEmailService(
+                    $app->make(EmailRenderer::class),
+                    $app->make(OutlookGatewayInterface::class),
+                    $app->make(RecipientAllowlist::class),
+                ),
+
                 // Named so the intent is documented in code rather than only in
                 // a plan. Both need OAuth, which is a later phase.
                 'gmail', 'microsoft_graph' => throw new InvalidArgumentException(
@@ -66,7 +83,8 @@ class EmailServiceProvider extends ServiceProvider
                 ),
 
                 default => throw new InvalidArgumentException(
-                    "Unsupported email driver [{$driver}]. Available: 'local' (simulated), 'smtp' (real)."
+                    "Unsupported email driver [{$driver}]. Available: 'local' (simulated), "
+                    ."'smtp' (real), 'outlook' (hands off to the Outlook desktop app)."
                 ),
             };
         });

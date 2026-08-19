@@ -69,7 +69,7 @@ interface AIServiceInterface
      * @param  array<string, mixed>  $schema  Optional JSON Schema. Ollama constrains
      *                                        generation to it when supported; it is
      *                                        also used to check required keys.
-     * @param  array<string, mixed>  $options As generate().
+     * @param  array<string, mixed>  $options  As generate().
      *
      * @throws AiException
      */

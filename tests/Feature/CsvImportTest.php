@@ -380,8 +380,8 @@ class CsvImportTest extends TestCase
     public function test_the_template_covers_every_importable_field(): void
     {
         $response = $this->get(route('import.template'));
-        $header = strtolower(explode("
-", $response->streamedContent())[0]);
+        $header = strtolower(explode('
+', $response->streamedContent())[0]);
 
         // If a field exists on the form it must be in the template, or a user
         // cannot import what they can type.
@@ -396,8 +396,8 @@ class CsvImportTest extends TestCase
     public function test_the_template_includes_a_usable_example_row(): void
     {
         $content = $this->get(route('import.template'))->streamedContent();
-        $lines = array_filter(explode("
-", $content));
+        $lines = array_filter(explode('
+', $content));
 
         $this->assertGreaterThan(1, count($lines), 'Template should carry an example row.');
         // On a .example domain, so it cannot be mistaken for a real lead.

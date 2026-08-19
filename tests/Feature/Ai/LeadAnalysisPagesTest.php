@@ -6,6 +6,7 @@ namespace Tests\Feature\Ai;
 
 use App\Enums\RecommendationStatus;
 use App\Enums\RecommendationType;
+use App\Models\Activity;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Lead;
@@ -81,7 +82,7 @@ class LeadAnalysisPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Lead page                                                       */
+    /* Lead page */
     /* ---------------------------------------------------------------- */
 
     public function test_the_lead_page_renders_with_no_analysis(): void
@@ -108,7 +109,7 @@ class LeadAnalysisPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Analyse                                                         */
+    /* Analyse */
     /* ---------------------------------------------------------------- */
 
     public function test_analysing_creates_an_analysis_and_reports_success(): void
@@ -185,7 +186,7 @@ class LeadAnalysisPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Human review                                                    */
+    /* Human review */
     /* ---------------------------------------------------------------- */
 
     public function test_accepting_a_recommendation_marks_it_and_logs_an_activity(): void
@@ -228,7 +229,7 @@ class LeadAnalysisPagesTest extends TestCase
         $this->assertSame(RecommendationStatus::Accepted, $match->fresh()->status);
         $this->assertSame(
             1,
-            \App\Models\Activity::where('title', 'Accepted AI product recommendation')->count(),
+            Activity::where('title', 'Accepted AI product recommendation')->count(),
         );
     }
 
@@ -261,7 +262,7 @@ class LeadAnalysisPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* History                                                         */
+    /* History */
     /* ---------------------------------------------------------------- */
 
     public function test_analysis_history_accumulates_and_is_listed_newest_first(): void
@@ -307,7 +308,7 @@ class LeadAnalysisPagesTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Manual override (§17)                                           */
+    /* Manual override (§17) */
     /* ---------------------------------------------------------------- */
 
     public function test_a_product_can_still_be_added_manually(): void

@@ -6,6 +6,7 @@ namespace Tests\Feature\Research;
 
 use App\Services\Research\Exceptions\UnsafeUrlException;
 use App\Services\Research\PublicUrlGuard;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -26,7 +27,7 @@ class PublicUrlGuardTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Blocked: the whole point                                         */
+    /* Blocked: the whole point */
     /* ---------------------------------------------------------------- */
 
     public static function blockedUrls(): array
@@ -56,7 +57,7 @@ class PublicUrlGuardTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('blockedUrls')]
+    #[DataProvider('blockedUrls')]
     public function test_it_blocks_internal_addresses(string $url): void
     {
         $this->expectException(UnsafeUrlException::class);
@@ -64,7 +65,7 @@ class PublicUrlGuardTest extends TestCase
         $this->guard()->assertSafe($url);
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('blockedUrls')]
+    #[DataProvider('blockedUrls')]
     public function test_blocked_addresses_are_also_reported_as_unsafe(string $url): void
     {
         $this->assertFalse($this->guard()->isSafe($url));
@@ -109,7 +110,7 @@ class PublicUrlGuardTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Allowed                                                          */
+    /* Allowed */
     /* ---------------------------------------------------------------- */
 
     public function test_it_allows_ordinary_public_websites(): void
@@ -144,7 +145,7 @@ class PublicUrlGuardTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Configuration                                                    */
+    /* Configuration */
     /* ---------------------------------------------------------------- */
 
     public function test_the_blocklist_covers_every_range_that_matters(): void

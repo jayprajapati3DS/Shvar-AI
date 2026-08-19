@@ -8,6 +8,7 @@ use App\Enums\AiRequestStatus;
 use App\Enums\AiRequestType;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * One entry in the local AI request log.
@@ -53,9 +54,9 @@ class AiRequest extends Model
      *
      * Null for Playground runs and connection tests.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<Lead, $this>
+     * @return BelongsTo<Lead, $this>
      */
-    public function lead(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);
     }
@@ -63,9 +64,9 @@ class AiRequest extends Model
     /**
      * The company this request concerned, when it concerned one.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<Company, $this>
+     * @return BelongsTo<Company, $this>
      */
-    public function company(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
     }

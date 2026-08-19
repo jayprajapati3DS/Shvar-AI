@@ -13,6 +13,7 @@ use App\Services\AI\Exceptions\ModelUnavailableException;
 use App\Services\AI\Exceptions\PromptTooLargeException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Throwable;
 
@@ -46,7 +47,7 @@ class OllamaAIService implements AIServiceInterface
     ) {}
 
     /* ---------------------------------------------------------------------- */
-    /* Generation                                                             */
+    /* Generation */
     /* ---------------------------------------------------------------------- */
 
     public function generate(
@@ -87,7 +88,7 @@ class OllamaAIService implements AIServiceInterface
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Discovery                                                              */
+    /* Discovery */
     /* ---------------------------------------------------------------------- */
 
     public function isAvailable(): bool
@@ -215,7 +216,7 @@ class OllamaAIService implements AIServiceInterface
     }
 
     /* ---------------------------------------------------------------------- */
-    /* Internals                                                              */
+    /* Internals */
     /* ---------------------------------------------------------------------- */
 
     /**
@@ -340,6 +341,29 @@ class OllamaAIService implements AIServiceInterface
      * @param  array<string, mixed>  $schema
      * @return array<string, mixed>
      */
+    /**
+     * Guarantee valid UTF-8 before the request is JSON-encoded.
+     *
+     * Invalid bytes here surface as a Guzzle InvalidArgumentException deep in
+     * the transport, which tells the user nothing and points at the wrong
+     * layer. Cleaning is better than failing: an em-dash that arrived as a
+     * Windows-1252 byte should not stop a lead being analysed.
+     */
+    private function utf8(string $value): string
+    {
+        if ($value === '' || mb_check_encoding($value, 'UTF-8')) {
+            return $value;
+        }
+
+        $converted = @mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
+
+        if (is_string($converted) && mb_check_encoding($converted, 'UTF-8')) {
+            return $converted;
+        }
+
+        return (string) @iconv('UTF-8', 'UTF-8//IGNORE', $value);
+    }
+
     private function buildRequestBody(
         string $model,
         string $prompt,
@@ -352,7 +376,12 @@ class OllamaAIService implements AIServiceInterface
     ): array {
         $body = [
             'model' => $model,
-            'prompt' => $prompt,
+            // Scrubbed to valid UTF-8. Not paranoia: the JSON encoder inside the
+            // HTTP client throws "Malformed UTF-8 characters" on a single stray
+            // Windows-1252 byte, from a place that explains nothing about where
+            // it came from. Text reaching here has passed through Outlook, CSV
+            // files and a browser, any of which can supply one.
+            'prompt' => $this->utf8($prompt),
             // Non-streaming. See the class docblock on adding streaming later.
             'stream' => false,
             'options' => array_filter(
@@ -365,7 +394,7 @@ class OllamaAIService implements AIServiceInterface
         ];
 
         if (is_string($system) && trim($system) !== '') {
-            $body['system'] = $system;
+            $body['system'] = $this->utf8($system);
         }
 
         if ($structured) {
@@ -481,7 +510,7 @@ class OllamaAIService implements AIServiceInterface
         return is_string($version) ? $version : null;
     }
 
-    private function client(int $timeout): \Illuminate\Http\Client\PendingRequest
+    private function client(int $timeout): PendingRequest
     {
         return $this->http
             ->baseUrl($this->endpoint())

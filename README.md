@@ -594,6 +594,22 @@ case-sensitive in PostgreSQL, where it should become `ilike`.
   Detailed). No mail host, port or credential exists to configure, because nothing can send
 - **Email Drafts page** — list, filter by status / variant / product / company, search, open the
   editor with quality panel, preview, version history and approval
+- **Outlook desktop integration** — drives the classic Outlook already signed in on this machine
+  over COM. No credentials, no SMTP AUTH, no OAuth, nothing across the network. Sending opens the
+  message in Outlook for a final look and you press Send there, so a handed-off draft is **Queued**
+  rather than Sent until Outlook confirms it really went. See
+  [docs/OUTLOOK_INTEGRATION.md](docs/OUTLOOK_INTEGRATION.md)
+- **Replies** — reads mail from people already in your CRM and nothing else. Verified against a real
+  5,800-message mailbox, which imported zero because no contact had written. Idempotent, capped, and
+  a button rather than a background poll: reading someone's mail should be something they asked for
+  and can see happening
+- **The local model reads replies** — classifies them (interested / question / not now / wrong
+  person / out of office / unsubscribe), quotes the sentences that justify it and verifies those
+  quotes against the message. Tuned against optimism, which is this feature's failure mode: polite
+  deferrals like *"we will keep this on file"* are named in the prompt as `Not now`, not interest
+- **Follow-ups** — a reminder with a date, suggested by the model or written by hand and labelled
+  either way. Nothing acts on one; no follow-up is ever suggested after a refusal, and that is
+  enforced structurally rather than by asking the model nicely
 - **One email, up to three products** — pick which to lead with and which to weave in. Each extra
   gets at most a sentence and only where the company data supports it; the model is told to drop one
   rather than pad the email with it. Three is a cap, because past that an email stops being about
@@ -609,7 +625,7 @@ and threat model.
 
 **Placeholders** (navigation present, scope stated on the page, no AI behind them)
 
-- Follow-ups · Knowledge Base
+- Knowledge Base
 
 **Still declared but NOT implemented**
 
@@ -621,7 +637,7 @@ and threat model.
 ### Test results
 
 ```
-php artisan test        →  474 passed, 4761 assertions
+php artisan test        →  502 passed, 5118 assertions
 npm run type-check      →  clean
 npm run build           →  clean
 ```
@@ -652,6 +668,8 @@ npm run build           →  clean
 | `Email/SmtpSendingTest` | all three send gates (unapproved, not allowlisted, unconfigured), an allowlist refusal is not a delivery failure, domain rules, settings validation, clearing the password |
 | `Email/MultiProductEmailTest` | the full product set is recorded, the first becomes primary, order preserved, capped at three, duplicates collapsed, claims checked across all products, secondaries must also be accepted |
 | `Email/EmailStyleLearningTest` | nothing learned from too little or from the wrong drafts, a dead heat is not a preference, medians resist outliers, deleted sentences become bans, the block reaches the prompt, and the switch works |
+| `Email/OutlookIntegrationTest` | handing a draft to Outlook queues rather than sends it, reconciliation only promotes what really went, the allowlist applies, and only mail from CRM contacts is imported |
+| `Ai/PromptEncodingTest` | Windows-1252 text from Outlook, Excel or Word reaches the model instead of throwing inside the HTTP client, and clean UTF-8 is left untouched |
 
 Ollama does **not** need to be running for the suite to pass — every Ollama response is faked.
 

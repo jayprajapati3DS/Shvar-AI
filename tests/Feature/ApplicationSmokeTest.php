@@ -4,15 +4,27 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Contracts\Ai\AiProvider;
+use App\Contracts\Ai\ProductMatcher;
+use App\Enums\AiRequestType;
+use App\Enums\LeadStatus;
+use App\Enums\RecommendationType;
 use App\Models\Company;
 use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\Product;
+use App\Services\AI\AIServiceInterface;
 use App\Services\AI\LocalEndpointGuard;
+use App\Services\AI\OllamaAIService;
+use App\Services\AI\Recommendation\AiProductMatcher;
+use App\Services\Email\EmailServiceInterface;
+use App\Services\Email\LocalTestEmailService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Finder\Finder;
 use Tests\TestCase;
 
 /**
@@ -56,13 +68,13 @@ class ApplicationSmokeTest extends TestCase
         ];
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('pageRoutes')]
+    #[DataProvider('pageRoutes')]
     public function test_every_page_renders_on_an_empty_database(string $name): void
     {
         $this->get(route($name))->assertOk();
     }
 
-    #[\PHPUnit\Framework\Attributes\DataProvider('pageRoutes')]
+    #[DataProvider('pageRoutes')]
     public function test_every_page_renders_with_data(string $name): void
     {
         $company = Company::factory()->create();
@@ -89,22 +101,25 @@ class ApplicationSmokeTest extends TestCase
 
     public function test_the_placeholder_pages_report_real_counts(): void
     {
-        Lead::factory()->status(\App\Enums\LeadStatus::Qualified)->create();
-        Lead::factory()->status(\App\Enums\LeadStatus::FollowUp)->create();
+        Lead::factory()->status(LeadStatus::Qualified)->create();
+        Lead::factory()->status(LeadStatus::FollowUp)->create();
         Product::factory()->count(3)->create();
         Product::factory()->inactive()->create();
 
-        // Email Drafts graduated out of PlaceholderController in Phase 4.
-        $this->get(route('follow-ups.index'))
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Placeholders/FollowUps')
-                ->where('context.leadsInFollowUp', 1));
-
+        // Email Drafts and Follow-ups both graduated out of
+        // PlaceholderController. Only the Knowledge Base stub remains.
         $this->get(route('knowledge-base.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Placeholders/KnowledgeBase')
                 ->where('context.products', 4)
                 ->where('context.activeProducts', 3));
+    }
+
+    public function test_follow_ups_is_a_real_module_and_no_longer_a_placeholder(): void
+    {
+        $this->get(route('follow-ups.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('FollowUps/Index'));
     }
 
     public function test_settings_is_a_real_module_and_no_longer_a_placeholder(): void
@@ -196,7 +211,7 @@ class ApplicationSmokeTest extends TestCase
             'api.mistral.ai',
         ];
 
-        $sources = \Symfony\Component\Finder\Finder::create()
+        $sources = Finder::create()
             ->in([app_path(), resource_path('js'), base_path('routes'), base_path('config')])
             ->files()
             ->name(['*.php', '*.ts', '*.vue']);
@@ -220,15 +235,15 @@ class ApplicationSmokeTest extends TestCase
         // placeholder App\Contracts\Ai\AiProvider was superseded by
         // App\Services\AI\AIServiceInterface and removed.
         $this->assertFalse(
-            interface_exists(\App\Contracts\Ai\AiProvider::class),
+            interface_exists(AiProvider::class),
             'The Phase 1 AiProvider placeholder should have been replaced by AIServiceInterface.'
         );
 
-        $this->assertTrue(interface_exists(\App\Services\AI\AIServiceInterface::class));
+        $this->assertTrue(interface_exists(AIServiceInterface::class));
 
         $this->assertInstanceOf(
-            \App\Services\AI\OllamaAIService::class,
-            app(\App\Services\AI\AIServiceInterface::class),
+            OllamaAIService::class,
+            app(AIServiceInterface::class),
         );
     }
 
@@ -236,11 +251,11 @@ class ApplicationSmokeTest extends TestCase
     {
         // PHASE 3: the Phase 1 ProductMatcher placeholder now has a real
         // implementation, resolved through the same provider as the AI service.
-        $this->assertTrue(interface_exists(\App\Contracts\Ai\ProductMatcher::class));
+        $this->assertTrue(interface_exists(ProductMatcher::class));
 
         $this->assertInstanceOf(
-            \App\Services\AI\Recommendation\AiProductMatcher::class,
-            app(\App\Contracts\Ai\ProductMatcher::class),
+            AiProductMatcher::class,
+            app(ProductMatcher::class),
         );
     }
 
@@ -252,8 +267,8 @@ class ApplicationSmokeTest extends TestCase
 
         $this->assertContains('leads/{lead}/products', $paths);
         $this->assertContains(
-            \App\Enums\RecommendationType::Manual,
-            \App\Enums\RecommendationType::cases(),
+            RecommendationType::Manual,
+            RecommendationType::cases(),
         );
     }
 
@@ -261,7 +276,7 @@ class ApplicationSmokeTest extends TestCase
     {
         // The single most important privacy assertion in the suite.
         $this->assertTrue(
-            app(\App\Services\AI\LocalEndpointGuard::class)->isLocal(config('ai.ollama.url')),
+            app(LocalEndpointGuard::class)->isLocal(config('ai.ollama.url')),
             'OLLAMA_URL must be a local address.'
         );
     }
@@ -278,16 +293,16 @@ class ApplicationSmokeTest extends TestCase
         }
 
         // Follow-up generation is still unbuilt.
-        $this->assertFalse(\App\Enums\AiRequestType::FollowUpGeneration->isImplemented());
+        $this->assertFalse(AiRequestType::FollowUpGeneration->isImplemented());
     }
 
     public function test_nothing_can_send_a_real_email(): void
     {
         // Phase 4 ships simulated sending only. The bound service must be the
         // local one, and it must say so about itself.
-        $service = app(\App\Services\Email\EmailServiceInterface::class);
+        $service = app(EmailServiceInterface::class);
 
-        $this->assertInstanceOf(\App\Services\Email\LocalTestEmailService::class, $service);
+        $this->assertInstanceOf(LocalTestEmailService::class, $service);
         $this->assertTrue($service->isSimulated());
         $this->assertSame('local', config('email.driver'));
     }

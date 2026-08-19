@@ -6,17 +6,19 @@ namespace App\Models;
 
 use App\Models\Concerns\BulkEditable;
 use App\Models\Concerns\HasActivities;
+use Database\Factories\CompanyFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Company extends Model
 {
     use BulkEditable;
     use HasActivities;
 
-    /** @use HasFactory<\Database\Factories\CompanyFactory> */
+    /** @use HasFactory<CompanyFactory> */
     use HasFactory;
 
     protected $fillable = [
@@ -62,9 +64,9 @@ class Company extends Model
      * Products attached to any of this company's leads — the "associated
      * products" block on the company detail page.
      *
-     * @return \Illuminate\Support\Collection<int, Product>
+     * @return Collection<int, Product>
      */
-    public function associatedProducts(): \Illuminate\Support\Collection
+    public function associatedProducts(): Collection
     {
         return Product::query()
             ->whereHas('leadMatches.lead', fn (Builder $q) => $q->where('company_id', $this->id))

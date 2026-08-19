@@ -49,6 +49,7 @@ class EmailDraft extends Model
         'approved_at',
         'sent_at',
         'delivery_mode',
+        'delivery_reference',
         'delivery_error',
     ];
 

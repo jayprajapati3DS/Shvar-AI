@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Ai;
 
 use App\Models\AiSetting;
+use App\Services\AI\AIServiceInterface;
 use App\Services\AI\AiSettings;
 use App\Services\AI\Exceptions\InsecureEndpointException;
 use App\Services\AI\LocalEndpointGuard;
@@ -40,7 +41,7 @@ class AiSettingsTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Persistence                                                     */
+    /* Persistence */
     /* ---------------------------------------------------------------- */
 
     public function test_settings_fall_back_to_config_when_nothing_is_saved(): void
@@ -130,7 +131,7 @@ class AiSettingsTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* System prompt                                                   */
+    /* System prompt */
     /* ---------------------------------------------------------------- */
 
     public function test_the_default_system_prompt_is_the_library_base(): void
@@ -164,7 +165,7 @@ class AiSettingsTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Endpoint security boundary                                      */
+    /* Endpoint security boundary */
     /* ---------------------------------------------------------------- */
 
     public function test_the_endpoint_is_read_from_config_not_the_database(): void
@@ -249,7 +250,7 @@ class AiSettingsTest extends TestCase
         Http::fake();
 
         try {
-            app(\App\Services\AI\AIServiceInterface::class)->generate('Leak my CRM data');
+            app(AIServiceInterface::class)->generate('Leak my CRM data');
             $this->fail('Expected InsecureEndpointException.');
         } catch (InsecureEndpointException $e) {
             $this->assertStringContainsString('not on this machine', $e->userMessage());
@@ -264,7 +265,7 @@ class AiSettingsTest extends TestCase
         config(['ai.ollama.url' => 'https://api.example.com']);
         Http::fake();
 
-        $status = app(\App\Services\AI\AIServiceInterface::class)->status();
+        $status = app(AIServiceInterface::class)->status();
 
         $this->assertFalse($status->connected);
         $this->assertFalse($status->isReady());

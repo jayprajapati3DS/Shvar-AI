@@ -67,7 +67,7 @@ class RecommendationValidationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Product identity                                                */
+    /* Product identity */
     /* ---------------------------------------------------------------- */
 
     public function test_an_invented_product_id_is_dropped(): void
@@ -122,7 +122,7 @@ class RecommendationValidationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Modules                                                         */
+    /* Modules */
     /* ---------------------------------------------------------------- */
 
     public function test_a_real_module_is_kept(): void
@@ -156,7 +156,7 @@ class RecommendationValidationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Confidence coercion                                             */
+    /* Confidence coercion */
     /* ---------------------------------------------------------------- */
 
     public function test_a_percentage_confidence_is_normalised(): void
@@ -215,7 +215,7 @@ class RecommendationValidationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Ordering and primary                                            */
+    /* Ordering and primary */
     /* ---------------------------------------------------------------- */
 
     public function test_recommendations_are_ordered_by_priority_then_confidence(): void
@@ -263,7 +263,7 @@ class RecommendationValidationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Field coercion                                                  */
+    /* Field coercion */
     /* ---------------------------------------------------------------- */
 
     public function test_evidence_entries_wrapped_in_objects_are_unwrapped(): void
@@ -299,7 +299,7 @@ class RecommendationValidationTest extends TestCase
     }
 
     /* ---------------------------------------------------------------- */
-    /* Confidence calibration                                          */
+    /* Confidence calibration */
     /* ---------------------------------------------------------------- */
 
     public function test_a_sparse_record_caps_an_overconfident_score(): void
