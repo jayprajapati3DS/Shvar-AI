@@ -43,9 +43,9 @@ class LocalTestEmailService implements EmailServiceInterface
             throw new EmailNotApprovedException($draft->status);
         }
 
-        $draft->loadMissing(['contact', 'product', 'lead.company']);
+        $draft->loadMissing(['product', 'lead.company']);
 
-        $recipient = (string) ($draft->recipient_email ?? $draft->contact?->email ?? '');
+        $recipient = (string) ($draft->recipient_email ?? $draft->lead?->email ?? '');
         $rendered = $this->renderer->render($draft);
         $at = new DateTimeImmutable;
 

@@ -58,7 +58,7 @@ class ProductController extends Controller
             // Leads this product is currently attached to.
             'leads' => LeadResource::collection(
                 $product->leads()
-                    ->with(['company:id,name', 'contact:id,first_name,last_name'])
+                    ->with('company:id,name')
                     ->latest('leads.updated_at')
                     ->get()
             ),

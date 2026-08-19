@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\Lead;
+use App\Models\LeadAnalysis;
 use App\Services\AI\Exceptions\AiException;
 use App\Services\AI\Recommendation\AiProductMatcher;
 use Illuminate\Console\Command;
@@ -86,7 +87,7 @@ class RunRecommendationScenarios extends Command
         return $failures === 0 ? self::SUCCESS : self::FAILURE;
     }
 
-    private function report(\App\Models\LeadAnalysis $analysis): void
+    private function report(LeadAnalysis $analysis): void
     {
         $this->line(sprintf('  %s   %ss', $analysis->model, $analysis->seconds()));
 

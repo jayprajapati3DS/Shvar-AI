@@ -9,7 +9,6 @@ use App\Enums\LeadStatus;
 use App\Enums\Priority;
 use App\Enums\RecommendationType;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -23,8 +22,8 @@ class LeadTest extends TestCase
     public function test_index_lists_leads_with_company_contact_and_products(): void
     {
         $company = Company::factory()->create(['name' => 'Acme Medical']);
-        $contact = Contact::factory()->create(['company_id' => $company->id]);
-        $lead = Lead::factory()->create(['company_id' => $company->id, 'contact_id' => $contact->id]);
+        $lead = Lead::factory()->create(['company_id' => $company->id,
+        ]);
 
         $product = Product::factory()->create(['name' => 'MySegmenter Test']);
         $lead->productMatches()->create(['product_id' => $product->id]);
@@ -62,8 +61,9 @@ class LeadTest extends TestCase
     public function test_index_search_matches_company_and_contact(): void
     {
         $company = Company::factory()->create(['name' => 'Findable Devices']);
-        $contact = Contact::factory()->create(['company_id' => $company->id, 'email' => 'target@findable.example']);
-        Lead::factory()->create(['company_id' => $company->id, 'contact_id' => $contact->id]);
+        Lead::factory()->create(['company_id' => $company->id,
+            'email' => 'target@findable.example',
+        ]);
         Lead::factory()->create();
 
         $this->get(route('leads.index', ['search' => 'Findable Devices']))
@@ -103,18 +103,28 @@ class LeadTest extends TestCase
         ])->assertSessionHasErrors('company_id');
     }
 
-    public function test_a_contact_from_another_company_is_rejected(): void
+    public function test_a_lead_with_nothing_to_identify_it_is_rejected(): void
     {
-        $companyA = Company::factory()->create();
-        $companyB = Company::factory()->create();
-        $contactB = Contact::factory()->create(['company_id' => $companyB->id]);
-
+        // The rule that replaced the old cross-company contact check. A row
+        // with no company, no name and no address is not a lead - it is an
+        // empty record that sits in the list forever confusing everyone.
         $this->post(route('leads.store'), [
-            'company_id' => $companyA->id,
-            'contact_id' => $contactB->id,
             'lead_status' => LeadStatus::New->value,
             'priority' => Priority::Medium->value,
-        ])->assertSessionHasErrors('contact_id');
+        ])->assertSessionHasErrors('company_id');
+    }
+
+    public function test_a_lead_identified_by_email_alone_is_accepted(): void
+    {
+        // No company and no name, but a real address - that is somebody you can
+        // actually write to, so it is a legitimate lead.
+        $this->post(route('leads.store'), [
+            'email' => 'someone@findable.example',
+            'lead_status' => LeadStatus::New->value,
+            'priority' => Priority::Medium->value,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('leads', ['email' => 'someone@findable.example']);
     }
 
     public function test_an_invalid_status_is_rejected(): void

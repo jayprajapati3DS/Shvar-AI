@@ -31,7 +31,7 @@ class CompanyController extends Controller
         $filters = $request->only(['search', 'country', 'industry', 'company_type']);
 
         $companies = Company::query()
-            ->withCount(['contacts', 'leads'])
+            ->withCount(['leads', 'contactableLeads'])
             ->search($filters['search'] ?? null)
             ->when($filters['country'] ?? null, fn ($q, $v) => $q->where('country', $v))
             ->when($filters['industry'] ?? null, fn ($q, $v) => $q->where('industry', $v))
@@ -57,8 +57,7 @@ class CompanyController extends Controller
     public function show(Company $company): Response
     {
         $company->load([
-            'contacts' => fn ($q) => $q->orderBy('first_name'),
-            'leads.contact:id,first_name,last_name',
+            'leads' => fn ($q) => $q->orderBy('first_name')->orderBy('id'),
             'leads.company:id,name',
             'activities',
         ]);
@@ -108,7 +107,7 @@ class CompanyController extends Controller
         $company->delete();
 
         return to_route('companies.index')
-            ->with('success', "Company \"{$name}\" deleted. Its contacts and leads were kept.");
+            ->with('success', "Company \"{$name}\" deleted. The people you were working there were kept as leads.");
     }
 
     public function bulkUpdate(BulkCompanyActionRequest $request, BulkEditor $editor): RedirectResponse
@@ -134,7 +133,7 @@ class CompanyController extends Controller
 
         return back()->with(
             'success',
-            "Deleted {$deleted} compan(ies). Their contacts and leads were kept."
+            "Deleted {$deleted} compan(ies). The people you were working there were kept as leads."
         );
     }
 

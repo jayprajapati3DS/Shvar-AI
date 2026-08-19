@@ -21,7 +21,6 @@ class StoreFollowUpTaskRequest extends FormRequest
     {
         return [
             'lead_id' => ['required', 'integer', 'exists:leads,id'],
-            'contact_id' => ['nullable', 'integer', 'exists:contacts,id'],
 
             'title' => ['required', 'string', 'max:200'],
             'notes' => ['nullable', 'string', 'max:5000'],

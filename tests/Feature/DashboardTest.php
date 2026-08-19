@@ -7,7 +7,6 @@ namespace Tests\Feature;
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -24,7 +23,7 @@ class DashboardTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Dashboard')
                 ->where('summary.companies', 0)
-                ->where('summary.contacts', 0)
+                ->where('summary.contactable_leads', 0)
                 ->where('summary.leads', 0)
                 ->where('summary.opportunities', 0)
                 ->where('summary.won', 0)
@@ -37,8 +36,13 @@ class DashboardTest extends TestCase
     {
         // Every lead is pinned to one shared company so the company count is
         // exactly what this test creates, not whatever the factory implies.
+        //
+        // Thirteen people at one account. That used to be 2 contacts and 11
+        // leads; they are the same kind of record now.
         $company = Company::factory()->create();
-        Contact::factory()->count(2)->create(['company_id' => $company->id]);
+        // Pinned to New so they land in a known bucket - a random factory
+        // status would drift the stage counts below.
+        Lead::factory()->count(2)->status(LeadStatus::New)->create(['company_id' => $company->id]);
 
         $make = fn (LeadStatus $status, int $count = 1) => Lead::factory()
             ->count($count)
@@ -58,9 +62,11 @@ class DashboardTest extends TestCase
         $this->get(route('dashboard'))
             ->assertInertia(fn (Assert $page) => $page
                 ->where('summary.companies', 1)
-                ->where('summary.contacts', 2)
-                ->where('summary.leads', 11)
-                ->where('summary.new_leads', 4)
+                // Factory leads carry an email, so every one is reachable -
+                // including the won and closed ones the `leads` count excludes.
+                ->where('summary.contactable_leads', 13)
+                ->where('summary.leads', 13)
+                ->where('summary.new_leads', 6)
                 ->where('summary.qualified_leads', 2)
                 ->where('summary.follow_ups', 1)
                 ->where('summary.opportunities', 3)

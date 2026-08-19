@@ -35,8 +35,7 @@ class EmailReplyController extends Controller
 
         $replies = EmailReply::query()
             ->with([
-                'contact:id,first_name,last_name,email,job_title,company_id',
-                'contact.company:id,name',
+                'lead',
                 'lead:id,company_id,lead_status',
                 'draft:id,subject',
                 'followUpTasks',
@@ -143,8 +142,8 @@ class EmailReplyController extends Controller
             'reviewed_at' => $reply->reviewed_at?->toIso8601String(),
 
             'lead_id' => $reply->lead_id,
-            'company' => $reply->contact?->company?->name,
-            'job_title' => $reply->contact?->job_title,
+            'company' => $reply->lead?->company?->name,
+            'job_title' => $reply->lead?->job_title,
             'answers_draft' => $reply->draft === null ? null : [
                 'id' => $reply->draft->id,
                 'subject' => $reply->draft->subject,

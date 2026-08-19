@@ -42,9 +42,9 @@ class RunEmailScenarios extends Command
         $ids = array_map(intval(...), (array) $this->argument('leads'));
 
         $leads = Lead::query()
-            ->with(['company', 'contact'])
-            ->whereNotNull('contact_id')
-            ->whereHas('contact', fn ($q) => $q->whereNotNull('email'))
+            ->with('company')
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
             ->whereHas('productMatches', fn ($q) => $q
                 ->where('status', RecommendationStatus::Accepted->value))
             ->when($ids !== [], fn ($query) => $query->whereIn('id', $ids))
@@ -52,7 +52,7 @@ class RunEmailScenarios extends Command
             ->get();
 
         if ($leads->isEmpty()) {
-            $this->warn('No eligible leads. A lead needs a contact with an email address and an');
+            $this->warn('No eligible leads. A lead needs an email address and an');
             $this->warn('accepted product recommendation. Try:');
             $this->line('  php artisan db:seed --class=EmailScenarioSeeder');
 

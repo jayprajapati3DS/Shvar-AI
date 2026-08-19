@@ -50,6 +50,18 @@ export type BadgeColor =
 export interface Company {
     id: number;
     name: string;
+
+    /**
+     * The pipeline lives on the company, not the lead.
+     *
+     * A lead's status says where one PERSON has got to; this says where the
+     * ACCOUNT has got to - the thing actually being won.
+     */
+    status: string;
+    status_color: BadgeColor;
+    won_at: string | null;
+    lost_at: string | null;
+    outcome_reason: string | null;
     website: string | null;
     country: string | null;
     state: string | null;
@@ -60,19 +72,22 @@ export interface Company {
     specialties: string | null;
     products_services: string | null;
     notes: string | null;
-    contacts_count?: number;
+    /** Leads at this company with an email address. */
+    contactable_leads_count?: number;
     leads_count?: number;
-    contacts?: Contact[];
     leads?: Lead[];
     activities?: Activity[];
     created_at: string | null;
     updated_at: string | null;
 }
 
-export interface Contact {
+
+export interface Lead {
     id: number;
     company_id: number | null;
-    first_name: string;
+
+    /** The person. A lead IS the contact now - there is no separate record. */
+    first_name: string | null;
     last_name: string | null;
     full_name: string;
     job_title: string | null;
@@ -82,19 +97,10 @@ export interface Contact {
     linkedin_url: string | null;
     country: string | null;
     city: string | null;
-    notes: string | null;
-    company?: Company;
-    leads?: Lead[];
-    leads_count?: number;
-    activities?: Activity[];
-    created_at: string | null;
-    updated_at: string | null;
-}
-
-export interface Lead {
-    id: number;
-    company_id: number | null;
-    contact_id: number | null;
+    /** Whether a person is actually named on this lead. */
+    is_named: boolean;
+    /** Whether there is an address to write to. */
+    is_contactable: boolean;
     lead_source: string | null;
     lead_status: LeadStatus;
     status_color: BadgeColor;
@@ -103,7 +109,6 @@ export interface Lead {
     assigned_to: string | null;
     notes: string | null;
     company?: Company;
-    contact?: Contact;
     product_matches?: LeadProductMatch[];
     activities?: Activity[];
     products_count?: number;

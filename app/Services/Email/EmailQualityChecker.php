@@ -75,7 +75,7 @@ class EmailQualityChecker
      */
     public function check(EmailDraft $draft, ?EmailLength $length = null): array
     {
-        $draft->loadMissing(['contact', 'product']);
+        $draft->loadMissing(['lead', 'product']);
 
         $body = (string) $draft->body;
         $subject = (string) $draft->subject;
@@ -123,7 +123,7 @@ class EmailQualityChecker
     /** @return array{key: string, label: string, status: string, detail: string|null} */
     private function recipient(EmailDraft $draft): array
     {
-        $email = $draft->recipient_email ?? $draft->contact?->email;
+        $email = $draft->recipient_email ?? $draft->lead?->email;
 
         if (blank($email)) {
             return $this->fail('recipient', 'Recipient', 'No email address on this contact.');

@@ -36,9 +36,9 @@ class FollowUpTaskController extends Controller
 
         $tasks = FollowUpTask::query()
             ->with([
-                'lead:id,company_id,contact_id,lead_status',
+                'lead:id,company_id,first_name,last_name,email,lead_status',
                 'lead.company:id,name',
-                'contact:id,first_name,last_name,email',
+                'lead',
                 'reply:id,subject,classification,received_at',
             ])
             ->filter($filters)
@@ -87,7 +87,6 @@ class FollowUpTaskController extends Controller
 
         FollowUpTask::create([
             ...$request->validated(),
-            'contact_id' => $request->input('contact_id', $lead->contact_id),
             'status' => FollowUpStatus::Open,
 
             // Written by hand, and recorded as such. Knowing which items came
@@ -171,7 +170,7 @@ class FollowUpTaskController extends Controller
 
             'lead_id' => $task->lead_id,
             'company' => $task->lead?->company?->name,
-            'contact' => $task->contact?->full_name,
+            'person' => $task->lead?->full_name,
 
             'reply' => $task->reply === null ? null : [
                 'id' => $task->reply->id,

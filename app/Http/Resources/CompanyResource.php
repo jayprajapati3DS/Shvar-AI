@@ -17,6 +17,20 @@ class CompanyResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
+
+            // The pipeline. Lives on the company because the company is what
+            // gets won; a lead's status tracks one person's progress.
+            // Null-safe on purpose: a company is often loaded with a narrow
+            // select (`lead.company:id,name`) to keep a list query cheap, and a
+            // resource that 500s on that is a resource that dictates how every
+            // caller must query.
+            'status' => $this->status?->value,
+            'status_color' => $this->status?->color(),
+            'status_description' => $this->status?->describe(),
+            'won_at' => $this->won_at?->toIso8601String(),
+            'lost_at' => $this->lost_at?->toIso8601String(),
+            'outcome_reason' => $this->outcome_reason,
+            'is_won' => $this->status?->value === 'Won',
             'website' => $this->website,
             'country' => $this->country,
             'state' => $this->state,
@@ -30,10 +44,9 @@ class CompanyResource extends JsonResource
 
             // Only present when the controller eager-loaded counts, so list and
             // detail views can share this resource without extra queries.
-            'contacts_count' => $this->whenCounted('contacts'),
+            'contactable_leads_count' => $this->whenCounted('contactableLeads'),
             'leads_count' => $this->whenCounted('leads'),
 
-            'contacts' => ContactResource::collection($this->whenLoaded('contacts')),
             'leads' => LeadResource::collection($this->whenLoaded('leads')),
             'activities' => ActivityResource::collection($this->whenLoaded('activities')),
 

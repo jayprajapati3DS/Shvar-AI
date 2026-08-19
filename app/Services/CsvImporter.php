@@ -8,14 +8,16 @@ use App\Enums\LeadSource;
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
- * One-file CSV import that creates a Company, a Contact and a Lead per row.
+ * One-file CSV import that creates a Company and a Lead per row.
+ *
+ * A lead IS the person, so one row is one person at one company - there is no
+ * separate contact record to keep in step any more.
  *
  * Deliberately two-phase: analyse() parses and validates without touching the
  * database so the UI can show a preview, and import() re-parses and commits.
@@ -135,7 +137,7 @@ class CsvImporter
             ->mapWithKeys(fn (string $name) => [Company::normaliseName($name) => true])
             ->all();
 
-        $existingEmails = Contact::whereNotNull('email')
+        $existingEmails = Lead::whereNotNull('email')
             ->pluck('email')
             ->mapWithKeys(fn (string $email) => [mb_strtolower(trim($email)) => true])
             ->all();
@@ -160,7 +162,7 @@ class CsvImporter
             }
 
             if ($emailKey !== '' && isset($existingEmails[$emailKey])) {
-                $duplicateOf[] = 'contact email already in database';
+                $duplicateOf[] = 'a lead with this email already exists';
             }
 
             if ($emailKey !== '' && isset($seenInFile[$emailKey])) {
@@ -208,10 +210,10 @@ class CsvImporter
      * Commit the file.
      *
      * Rows with validation errors are always skipped. Duplicate rows are skipped
-     * unless $importDuplicates is true, in which case the existing company/contact
+     * unless $importDuplicates is true, in which case the existing company
      * is reused and only the lead is added.
      *
-     * @return array{imported: int, skipped: int, companies: int, contacts: int, leads: int, errors: list<string>}
+     * @return array{imported: int, skipped: int, companies: int, leads: int, errors: list<string>}
      */
     public function import(UploadedFile $file, bool $importDuplicates = false): array
     {
@@ -220,13 +222,12 @@ class CsvImporter
         $imported = 0;
         $skipped = 0;
         $companiesCreated = 0;
-        $contactsCreated = 0;
         $leadsCreated = 0;
         $errors = [];
 
         DB::transaction(function () use (
             $analysis, $importDuplicates,
-            &$imported, &$skipped, &$companiesCreated, &$contactsCreated, &$leadsCreated, &$errors
+            &$imported, &$skipped, &$companiesCreated, &$leadsCreated, &$errors
         ): void {
             foreach ($analysis['rows'] as $row) {
                 if (! $row['importable']) {
@@ -247,16 +248,34 @@ class CsvImporter
                 // Reuse an existing company by normalised name rather than
                 // creating a near-identical second record.
                 $company = $this->resolveCompany($data, $companiesCreated);
-                $contact = $this->resolveContact($data, $company, $contactsCreated);
 
                 Lead::create([
                     'company_id' => $company?->id,
-                    'contact_id' => $contact?->id,
+
+                    // The person. A row can carry only an email, so the local
+                    // part becomes the first name - a lead with no display name
+                    // is a row nobody can act on.
+                    'first_name' => $data['first_name'] ?: (filled($data['email'])
+                        ? strtok($data['email'], '@')
+                        : null),
+                    'last_name' => $data['last_name'] ?: null,
+                    'job_title' => $data['job_title'] ?: null,
+                    'department' => $data['department'] ?: null,
+                    'email' => $data['email'] ?: null,
+                    'phone' => $data['phone'] ?: null,
+                    'linkedin_url' => $data['linkedin_url'] ?: null,
+
+                    // The person's own location when the file gives one,
+                    // otherwise the company's - people usually sit where their
+                    // company does.
+                    'country' => $data['contact_country'] ?: ($data['country'] ?: null),
+                    'city' => $data['contact_city'] ?: ($data['city'] ?: null),
+
                     'lead_source' => $data['lead_source'] ?: LeadSource::Import->value,
                     'lead_status' => $data['lead_status'] ?: LeadStatus::New->value,
                     'priority' => $data['priority'] ?: Priority::Medium->value,
                     'assigned_to' => $data['assigned_to'] ?: null,
-                    'notes' => $data['notes'] ?: null,
+                    'notes' => $this->mergeNotes($data['notes'], $data['contact_notes']),
                 ]);
 
                 $leadsCreated++;
@@ -268,7 +287,6 @@ class CsvImporter
             'imported' => $imported,
             'skipped' => $skipped,
             'companies' => $companiesCreated,
-            'contacts' => $contactsCreated,
             'leads' => $leadsCreated,
             'errors' => $errors,
         ];
@@ -386,40 +404,27 @@ class CsvImporter
         return $company;
     }
 
-    /** @param array<string, string> $data */
-    private function resolveContact(array $data, ?Company $company, int &$created): ?Contact
+    /**
+     * One notes column out of two.
+     *
+     * The template still has separate Notes and Contact Notes columns because
+     * people's spreadsheets do. Both are kept, labelled, so neither disappears
+     * silently into the other.
+     */
+    private function mergeNotes(?string $leadNotes, ?string $contactNotes): ?string
     {
-        if (blank($data['first_name']) && blank($data['email'])) {
-            return null;
+        $lead = trim((string) $leadNotes);
+        $contact = trim((string) $contactNotes);
+
+        if ($lead === '') {
+            return $contact === '' ? null : $contact;
         }
 
-        if (filled($data['email'])) {
-            $existing = Contact::whereRaw('lower(email) = ?', [mb_strtolower(trim($data['email']))])->first();
-
-            if ($existing) {
-                return $existing;
-            }
+        if ($contact === '') {
+            return $lead;
         }
 
-        $created++;
-
-        return Contact::create([
-            'company_id' => $company?->id,
-            // A row can carry only an email; fall back to its local part so the
-            // contact still has a usable display name.
-            'first_name' => $data['first_name'] ?: strtok($data['email'], '@'),
-            'last_name' => $data['last_name'] ?: null,
-            'job_title' => $data['job_title'] ?: null,
-            'department' => $data['department'] ?: null,
-            'email' => $data['email'] ?: null,
-            'phone' => $data['phone'] ?: null,
-            'linkedin_url' => $data['linkedin_url'] ?: null,
-            // Contact-specific location when the file gives one, otherwise the
-            // company's - a contact usually sits where the company does.
-            'country' => $data['contact_country'] ?: ($data['country'] ?: null),
-            'city' => $data['contact_city'] ?: ($data['city'] ?: null),
-            'notes' => $data['contact_notes'] ?: null,
-        ]);
+        return $lead."\n\nAbout them:\n".$contact;
     }
 
     /**

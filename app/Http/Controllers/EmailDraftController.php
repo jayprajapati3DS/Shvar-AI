@@ -45,9 +45,9 @@ class EmailDraftController extends Controller
 
         $drafts = EmailDraft::query()
             ->with([
-                'lead:id,company_id,contact_id,lead_status',
+                'lead:id,company_id,first_name,last_name,email,job_title,lead_status',
                 'lead.company:id,name',
-                'contact:id,first_name,last_name,email,job_title',
+                'lead',
                 'product:id,name,category',
             ])
             ->search($filters['search'] ?? null)
@@ -90,8 +90,7 @@ class EmailDraftController extends Controller
     {
         $draft->load([
             'lead.company',
-            'lead.contact',
-            'contact',
+            'lead',
             'product',
             'recommendation',
             'versions',

@@ -7,7 +7,6 @@ namespace Database\Seeders;
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use Illuminate\Database\Seeder;
 
@@ -34,14 +33,11 @@ class RecommendationScenarioSeeder extends Seeder
                 $scenario['company'],
             );
 
-            $contact = Contact::updateOrCreate(
-                ['email' => $scenario['contact']['email']],
-                [...$scenario['contact'], 'company_id' => $company->id],
-            );
-
             Lead::updateOrCreate(
-                ['company_id' => $company->id, 'contact_id' => $contact->id],
+                ['company_id' => $company->id, 'email' => $scenario['contact']['email']],
                 [
+                    ...$scenario['contact'],
+                    'company_id' => $company->id,
                     'lead_source' => $scenario['lead_source'],
                     'lead_status' => LeadStatus::Researching->value,
                     'priority' => Priority::Medium->value,

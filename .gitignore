@@ -31,3 +31,4 @@ Thumbs.db
 /database/*.sqlite-journal
 /database/*.sqlite-wal
 /database/*.sqlite-shm
+database/*.sqlite.bak-*

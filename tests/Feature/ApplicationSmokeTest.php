@@ -10,7 +10,6 @@ use App\Enums\AiRequestType;
 use App\Enums\LeadStatus;
 use App\Enums\RecommendationType;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\Product;
 use App\Services\AI\AIServiceInterface;
@@ -56,7 +55,6 @@ class ApplicationSmokeTest extends TestCase
             'dashboard' => ['dashboard'],
             'leads' => ['leads.index'],
             'companies' => ['companies.index'],
-            'contacts' => ['contacts.index'],
             'products' => ['products.index'],
             'import' => ['import.create'],
             'email drafts' => ['email-drafts.index'],
@@ -78,8 +76,8 @@ class ApplicationSmokeTest extends TestCase
     public function test_every_page_renders_with_data(string $name): void
     {
         $company = Company::factory()->create();
-        $contact = Contact::factory()->create(['company_id' => $company->id]);
-        $lead = Lead::factory()->create(['company_id' => $company->id, 'contact_id' => $contact->id]);
+        $lead = Lead::factory()->create(['company_id' => $company->id,
+        ]);
         $lead->productMatches()->create(['product_id' => Product::factory()->create()->id]);
 
         $this->get(route($name))->assertOk();
@@ -88,13 +86,12 @@ class ApplicationSmokeTest extends TestCase
     public function test_every_detail_page_renders(): void
     {
         $company = Company::factory()->create();
-        $contact = Contact::factory()->create(['company_id' => $company->id]);
-        $lead = Lead::factory()->create(['company_id' => $company->id, 'contact_id' => $contact->id]);
+        $lead = Lead::factory()->create(['company_id' => $company->id,
+        ]);
         $product = Product::factory()->create();
         $lead->productMatches()->create(['product_id' => $product->id]);
 
         $this->get(route('companies.show', $company))->assertOk();
-        $this->get(route('contacts.show', $contact))->assertOk();
         $this->get(route('leads.show', $lead))->assertOk();
         $this->get(route('products.show', $product))->assertOk();
     }
@@ -141,13 +138,13 @@ class ApplicationSmokeTest extends TestCase
         Http::preventStrayRequests();
 
         $company = Company::factory()->create();
-        $contact = Contact::factory()->create(['company_id' => $company->id]);
-        $lead = Lead::factory()->create(['company_id' => $company->id, 'contact_id' => $contact->id]);
+        $lead = Lead::factory()->create(['company_id' => $company->id,
+        ]);
         $product = Product::factory()->create();
         $lead->productMatches()->create(['product_id' => $product->id]);
 
         foreach ([
-            'dashboard', 'leads.index', 'companies.index', 'contacts.index',
+            'dashboard', 'leads.index', 'companies.index',
             'products.index', 'import.create',
             'email-drafts.index', 'follow-ups.index', 'knowledge-base.index',
         ] as $name) {
@@ -155,7 +152,6 @@ class ApplicationSmokeTest extends TestCase
         }
 
         $this->get(route('companies.show', $company))->assertOk();
-        $this->get(route('contacts.show', $contact))->assertOk();
         $this->get(route('products.show', $product))->assertOk();
 
         // NOTE: leads.show is deliberately absent. Since Phase 3 it probes the

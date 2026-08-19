@@ -8,7 +8,6 @@ use App\Enums\ActivityType;
 use App\Enums\LeadStatus;
 use App\Enums\Priority;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\Product;
 use Illuminate\Database\Seeder;
@@ -42,24 +41,36 @@ class SampleDataSeeder extends Seeder
                 collect($definition)->except(['contacts', 'lead'])->all(),
             );
 
-            $contacts = collect($definition['contacts'])->map(
-                fn (array $contact) => Contact::updateOrCreate(
-                    ['email' => $contact['email']],
-                    [...$contact, 'company_id' => $company->id],
-                )
-            );
-
             $leadDefinition = $definition['lead'];
+            $people = $definition['contacts'];
 
-            $lead = Lead::updateOrCreate(
-                ['company_id' => $company->id, 'contact_id' => $contacts->first()->id],
-                [
-                    'lead_source' => $leadDefinition['source'],
-                    'lead_status' => $leadDefinition['status'],
-                    'priority' => $leadDefinition['priority'],
-                    'notes' => $leadDefinition['notes'],
-                ],
-            );
+            // One lead per person. Several routes into the same account is the
+            // normal case, so the seed data shows it.
+            $lead = null;
+
+            foreach ($people as $index => $person) {
+                $created = Lead::updateOrCreate(
+                    ['company_id' => $company->id, 'email' => $person['email']],
+                    [
+                        ...$person,
+                        'company_id' => $company->id,
+                        'lead_source' => $leadDefinition['source'],
+                        // The first person is the one being actively worked;
+                        // the rest are known but untouched.
+                        'lead_status' => $index === 0
+                            ? $leadDefinition['status']
+                            : LeadStatus::New->value,
+                        'priority' => $leadDefinition['priority'],
+                        'notes' => $index === 0 ? $leadDefinition['notes'] : null,
+                    ],
+                );
+
+                $lead ??= $created;
+            }
+
+            if ($lead === null) {
+                continue;
+            }
 
             // Attach the products a human would plausibly have picked.
             foreach ($leadDefinition['products'] as $name => $reason) {

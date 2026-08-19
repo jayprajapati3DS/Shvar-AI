@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -54,17 +53,17 @@ class CsvImportTest extends TestCase
 
         // Nothing is persisted by a preview.
         $this->assertDatabaseCount('companies', 0);
-        $this->assertDatabaseCount('contacts', 0);
+        $this->assertDatabaseCount('leads', 0);
         $this->assertDatabaseCount('leads', 0);
     }
 
-    public function test_import_creates_companies_contacts_and_leads(): void
+    public function test_import_creates_companies_and_leads(): void
     {
         $this->post(route('import.store'), ['file' => $this->csv($this->validCsv())])
             ->assertRedirect(route('leads.index'));
 
         $this->assertDatabaseCount('companies', 2);
-        $this->assertDatabaseCount('contacts', 2);
+        $this->assertDatabaseCount('leads', 2);
         $this->assertDatabaseCount('leads', 2);
 
         $this->assertDatabaseHas('companies', [
@@ -79,7 +78,7 @@ class CsvImportTest extends TestCase
         $this->assertSame('Qualified', $lead->lead_status->value);
         $this->assertSame('High', $lead->priority->value);
         $this->assertSame('LinkedIn', $lead->lead_source);
-        $this->assertSame('Asha Patel', $lead->contact->full_name);
+        $this->assertSame('Asha Patel', $lead->full_name);
     }
 
     public function test_headers_are_matched_case_and_separator_insensitively(): void
@@ -92,7 +91,7 @@ class CsvImportTest extends TestCase
         $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
 
         $this->assertDatabaseHas('companies', ['name' => 'Loose Headers Ltd']);
-        $this->assertDatabaseHas('contacts', ['email' => 'loose@example.com', 'job_title' => 'Engineer']);
+        $this->assertDatabaseHas('leads', ['email' => 'loose@example.com', 'job_title' => 'Engineer']);
     }
 
     public function test_unrecognised_columns_are_reported_and_ignored(): void
@@ -150,7 +149,7 @@ class CsvImportTest extends TestCase
     public function test_existing_companies_and_emails_are_detected_as_duplicates(): void
     {
         Company::factory()->create(['name' => 'Acme Medical, Inc.']);
-        Contact::factory()->create(['email' => 'jonas@beta.example']);
+        Lead::factory()->create(['email' => 'jonas@beta.example']);
 
         $this->post(route('import.preview'), ['file' => $this->csv($this->validCsv())])
             ->assertInertia(fn (Assert $page) => $page
@@ -211,7 +210,7 @@ class CsvImportTest extends TestCase
         $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
 
         $this->assertDatabaseCount('companies', 1);
-        $this->assertDatabaseCount('contacts', 2);
+        $this->assertDatabaseCount('leads', 2);
         $this->assertDatabaseCount('leads', 2);
     }
 
@@ -224,7 +223,7 @@ class CsvImportTest extends TestCase
 
         $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
 
-        $this->assertDatabaseHas('contacts', ['first_name' => 'someone']);
+        $this->assertDatabaseHas('leads', ['first_name' => 'someone']);
     }
 
     public function test_blank_lines_are_skipped_rather_than_reported_as_errors(): void
@@ -280,7 +279,7 @@ class CsvImportTest extends TestCase
         $this->assertSame('Met at a trade show', $company->notes);
     }
 
-    public function test_contact_and_lead_specific_columns_are_imported(): void
+    public function test_person_and_lead_specific_columns_are_imported(): void
     {
         $csv = <<<'CSV'
         Company Name,Country,City,Contact First Name,Email,Contact Country,Contact City,Contact Notes,Assigned To,Notes
@@ -289,19 +288,21 @@ class CsvImportTest extends TestCase
 
         $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
 
-        $contact = Contact::sole();
+        $person = Lead::sole();
         $lead = Lead::sole();
 
         // Contact location overrides the company's when the file gives one.
-        $this->assertSame('India', $contact->country);
-        $this->assertSame('Chennai', $contact->city);
-        $this->assertSame('Prefers email', $contact->notes);
+        $this->assertSame('India', $person->country);
+        $this->assertSame('Chennai', $person->city);
+        $this->assertStringContainsString('Prefers email', (string) $person->notes);
 
         $this->assertSame('Jay Prajapati', $lead->assigned_to);
-        $this->assertSame('Wants a demo', $lead->notes);
+        // The two notes columns merge, both labelled, so neither is lost.
+        $this->assertStringContainsString('Wants a demo', (string) $lead->notes);
+        $this->assertStringContainsString('Prefers email', (string) $lead->notes);
     }
 
-    public function test_a_contact_inherits_the_company_location_when_none_is_given(): void
+    public function test_a_person_inherits_the_company_location_when_none_is_given(): void
     {
         $csv = <<<'CSV'
         Company Name,Country,City,Contact First Name,Email
@@ -310,10 +311,10 @@ class CsvImportTest extends TestCase
 
         $this->post(route('import.store'), ['file' => $this->csv($csv)])->assertRedirect();
 
-        $contact = Contact::sole();
+        $person = Lead::sole();
 
-        $this->assertSame('Germany', $contact->country);
-        $this->assertSame('Berlin', $contact->city);
+        $this->assertSame('Germany', $person->country);
+        $this->assertSame('Berlin', $person->city);
     }
 
     public function test_bare_notes_still_means_the_lead_note(): void
@@ -373,7 +374,7 @@ class CsvImportTest extends TestCase
         $this->assertSame('Acme Medical', $company->name);
         $this->assertSame('Hospital', $company->company_type);
         $this->assertSame('They do surgery', $company->description);
-        $this->assertSame('Head of R&D', Contact::sole()->job_title);
+        $this->assertSame('Head of R&D', Lead::sole()->job_title);
         $this->assertSame('Jay', Lead::sole()->assigned_to);
     }
 

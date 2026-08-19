@@ -9,7 +9,6 @@ use App\Enums\EmailLength;
 use App\Enums\EmailTone;
 use App\Enums\EmailVariant;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\EmailDraft;
 use App\Models\Lead;
 use App\Models\Product;
@@ -38,15 +37,11 @@ class EmailSignatureAndQualityTest extends TestCase
 
         $product = Product::factory()->create(['name' => '3dsurgical Platform']);
         $company = Company::factory()->create(['name' => 'Craniofax Implants']);
-        $contact = Contact::factory()->create([
-            'company_id' => $company->id,
-            'first_name' => 'Dana',
-            'email' => 'dana@craniofax.example',
-        ]);
 
         $lead = Lead::factory()->create([
             'company_id' => $company->id,
-            'contact_id' => $contact->id,
+            'first_name' => 'Dana',
+            'email' => 'dana@craniofax.example',
         ]);
 
         $body = "Hi Dana,\n\nI work with teams designing patient-specific implants. Our platform "
@@ -55,7 +50,6 @@ class EmailSignatureAndQualityTest extends TestCase
 
         $this->draft = EmailDraft::create([
             'lead_id' => $lead->id,
-            'contact_id' => $contact->id,
             'product_id' => $product->id,
             'variant' => EmailVariant::ProfessionalDirect,
             'status' => EmailDraftStatus::Draft,
@@ -205,7 +199,7 @@ class EmailSignatureAndQualityTest extends TestCase
     public function test_a_missing_recipient_is_a_blocking_failure(): void
     {
         $this->draft->update(['recipient_email' => null]);
-        $this->draft->contact->update(['email' => null]);
+        $this->draft->lead->update(['email' => null]);
 
         $checks = $this->checks();
 

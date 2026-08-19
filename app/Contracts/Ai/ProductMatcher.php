@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Contracts\Ai;
 
+use App\Enums\RecommendationType;
 use App\Models\Lead;
 use App\Models\LeadProductMatch;
 use Illuminate\Support\Collection;
@@ -23,8 +24,8 @@ use Illuminate\Support\Collection;
  * Manual selection remains available and unaffected - an AI recommendation never
  * replaces or blocks a hand-picked product.
  *
- * @see \App\Models\LeadProductMatch
- * @see \App\Enums\RecommendationType
+ * @see LeadProductMatch
+ * @see RecommendationType
  */
 interface ProductMatcher
 {

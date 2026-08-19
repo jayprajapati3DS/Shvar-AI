@@ -13,7 +13,7 @@ import PageHeader from '@/Components/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
 import { useBulkSelection } from '@/composables/useBulkSelection';
 import { routes } from '@/routes';
-import type { Contact, Lead, Paginated, SelectOption } from '@/types/models';
+import type { Lead, Paginated, SelectOption } from '@/types/models';
 import type { BulkField, Column } from '@/types/ui';
 
 const { leads, filters, filterOptions, options, bulkFields } = defineProps<{
@@ -31,14 +31,13 @@ const { leads, filters, filterOptions, options, bulkFields } = defineProps<{
         priorities: SelectOption[];
         sources: SelectOption[];
         companies: SelectOption[];
-        contacts: { data: Contact[] };
     };
     bulkFields: BulkField[];
 }>();
 
 const columns: Column[] = [
+    { label: 'Person' },
     { label: 'Company' },
-    { label: 'Contact' },
     { label: 'Job Title' },
     { label: 'Product Opportunity' },
     { label: 'Status' },
@@ -157,17 +156,28 @@ function confirmDelete() {
                 <template #row="{ row }">
                     <td class="td">
                         <Link :href="routes.leads.show(row.id)" class="font-medium text-slate-900 hover:text-indigo-600">
-                            {{ row.company?.name ?? 'No company' }}
+                            {{ row.full_name }}
                         </Link>
-                        <p v-if="row.company?.country" class="text-xs text-slate-400">{{ row.company.country }}</p>
+                        <p
+                            class="truncate text-xs"
+                            :class="row.is_contactable ? 'text-slate-400' : 'text-amber-600'"
+                        >
+                            {{ row.email ?? 'no email' }}
+                        </p>
                     </td>
 
                     <td class="td">
-                        <span v-if="row.contact">{{ row.contact.full_name }}</span>
-                        <span v-else class="text-slate-400">—</span>
+                        <Link
+                            v-if="row.company"
+                            :href="routes.companies.show(row.company.id)"
+                            class="text-slate-700 hover:text-indigo-600"
+                        >
+                            {{ row.company.name }}
+                        </Link>
+                        <span v-else class="text-amber-600">No company</span>
                     </td>
 
-                    <td class="td">{{ row.contact?.job_title ?? '—' }}</td>
+                    <td class="td">{{ row.job_title ?? '—' }}</td>
 
                     <td class="td">
                         <!-- Manually attached in Phase 1; AI-suggested from Phase 2. -->

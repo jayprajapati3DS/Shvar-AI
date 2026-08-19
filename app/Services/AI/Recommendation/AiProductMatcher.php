@@ -72,7 +72,7 @@ class AiProductMatcher implements ProductMatcher
      */
     public function analyse(Lead $lead): LeadAnalysis
     {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
         $catalogue = $this->productContext->catalogue();
         $evidenceStrength = $this->leadContext->evidenceStrength($lead);

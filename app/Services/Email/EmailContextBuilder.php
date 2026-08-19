@@ -37,7 +37,7 @@ class EmailContextBuilder
      */
     public function render(Lead $lead, iterable|LeadProductMatch $recommendations): string
     {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
         $set = $this->normalise($recommendations);
 
@@ -152,7 +152,7 @@ class EmailContextBuilder
 
     private function contactBlock(Lead $lead): string
     {
-        $contact = $lead->contact;
+        $contact = $lead;
 
         return implode("\n", [
             '=== RECIPIENT (the person this email is addressed to) ===',
@@ -270,7 +270,7 @@ class EmailContextBuilder
      */
     public function gaps(Lead $lead, iterable|LeadProductMatch $recommendations): array
     {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
         $set = $this->normalise($recommendations);
         $recommendation = $set[0] ?? null;
@@ -280,8 +280,8 @@ class EmailContextBuilder
         }
 
         $checks = [
-            'Contact first name' => $lead->contact?->first_name,
-            'Contact job title' => $lead->contact?->job_title,
+            'Contact first name' => $lead->first_name,
+            'Contact job title' => $lead->job_title,
             'Company description' => $lead->company?->description,
             'Industry' => $lead->company?->industry,
             'What the company sells' => $lead->company?->products_services,

@@ -11,7 +11,6 @@ use App\Enums\RecommendationStatus;
 use App\Enums\RecommendationType;
 use App\Models\AiRequest;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\LeadAnalysis;
 use App\Models\LeadProductMatch;
@@ -60,15 +59,10 @@ class ProductRecommendationTest extends TestCase
             'specialties' => 'Maxillofacial surgery',
         ]);
 
-        $contact = Contact::factory()->create([
+        $this->lead = Lead::factory()->create([
             'company_id' => $company->id,
             'job_title' => 'Head of Design Engineering',
             'department' => 'R&D',
-        ]);
-
-        $this->lead = Lead::factory()->create([
-            'company_id' => $company->id,
-            'contact_id' => $contact->id,
         ]);
     }
 
@@ -189,11 +183,11 @@ class ProductRecommendationTest extends TestCase
     {
         $this->fakeAi($this->goodPayload());
 
-        $before = $this->lead->only(['lead_status', 'priority', 'company_id', 'contact_id']);
+        $before = $this->lead->only(['lead_status', 'priority', 'company_id', 'email']);
 
         $this->matcher()->analyse($this->lead);
 
-        $this->assertSame($before, $this->lead->fresh()->only(['lead_status', 'priority', 'company_id', 'contact_id']));
+        $this->assertSame($before, $this->lead->fresh()->only(['lead_status', 'priority', 'company_id', 'email']));
     }
 
     public function test_reasoning_fields_are_stored(): void

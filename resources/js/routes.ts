@@ -50,18 +50,6 @@ export const routes = {
             `/companies/${id}/research/${analysisId}/apply`,
     },
 
-    contacts: {
-        index: (q?: Query) => withQuery('/contacts', q),
-        show: (id: number) => `/contacts/${id}`,
-        store: () => '/contacts',
-        update: (id: number) => `/contacts/${id}`,
-        destroy: (id: number) => `/contacts/${id}`,
-
-        // Bulk actions - both POST, since the selection is a list of ids.
-        bulkUpdate: () => '/contacts/bulk/update',
-        bulkDestroy: () => '/contacts/bulk/delete',
-    },
-
     leads: {
         index: (q?: Query) => withQuery('/leads', q),
         show: (id: number) => `/leads/${id}`,

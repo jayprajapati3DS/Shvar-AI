@@ -8,13 +8,12 @@ use App\Enums\ActivityType;
 use App\Http\Requests\StoreActivityRequest;
 use App\Models\Activity;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\RedirectResponse;
 
 /**
- * Timeline entries for leads, companies and contacts.
+ * Timeline entries for leads and companies.
  *
  * Phase 1 supports hand-logged Note / Call / Meeting entries. Phase 2 adds
  * system-written Email and Follow-up entries through the same table.
@@ -25,7 +24,6 @@ class ActivityController extends Controller
     private const SUBJECTS = [
         'leads' => Lead::class,
         'companies' => Company::class,
-        'contacts' => Contact::class,
     ];
 
     public function store(StoreActivityRequest $request, string $subjectType, int $subjectId): RedirectResponse

@@ -24,7 +24,6 @@ class EmailReply extends Model
     protected $fillable = [
         'outlook_entry_id',
         'conversation_id',
-        'contact_id',
         'lead_id',
         'email_draft_id',
         'from_address',
@@ -49,12 +48,6 @@ class EmailReply extends Model
             'received_at' => 'datetime',
             'reviewed_at' => 'datetime',
         ];
-    }
-
-    /** @return BelongsTo<Contact, $this> */
-    public function contact(): BelongsTo
-    {
-        return $this->belongsTo(Contact::class);
     }
 
     /** @return BelongsTo<Lead, $this> */

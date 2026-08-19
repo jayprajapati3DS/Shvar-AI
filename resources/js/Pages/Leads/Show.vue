@@ -14,7 +14,7 @@ import Modal from '@/Components/Modal.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import { routes } from '@/routes';
 import type { AiStatus, LeadAnalysis } from '@/types/ai';
-import type { Contact, EmailDraft, EmailGeneration, Lead, Product, SelectOption } from '@/types/models';
+import type { EmailDraft, EmailGeneration, Lead, Product, SelectOption } from '@/types/models';
 import type { DetailItem } from '@/types/ui';
 
 const { lead, options, availableProducts, activityTypes, analyses, latestAnalysis, aiStatus, email } =
@@ -25,7 +25,6 @@ const { lead, options, availableProducts, activityTypes, analyses, latestAnalysi
             priorities: SelectOption[];
             sources: SelectOption[];
             companies: SelectOption[];
-            contacts: { data: Contact[] };
         };
         availableProducts: { data: Product[] };
         activityTypes: SelectOption[];
@@ -84,7 +83,6 @@ function setStatus(status: string) {
         routes.leads.update(lead.data.id),
         {
             company_id: lead.data.company_id,
-            contact_id: lead.data.contact_id,
             lead_source: lead.data.lead_source,
             lead_status: status,
             priority: lead.data.priority,
@@ -104,11 +102,11 @@ function destroy() {
 </script>
 
 <template>
-    <Head :title="`Lead — ${lead.data.company?.name ?? lead.data.contact?.full_name ?? lead.data.id}`" />
+    <Head :title="`${lead.data.full_name} — ${lead.data.company?.name ?? 'no company'}`" />
 
     <PageHeader
-        :title="lead.data.company?.name ?? lead.data.contact?.full_name ?? `Lead #${lead.data.id}`"
-        :subtitle="lead.data.contact ? `${lead.data.contact.full_name}${lead.data.contact.job_title ? ` · ${lead.data.contact.job_title}` : ''}` : undefined"
+        :title="lead.data.full_name"
+        :subtitle="[lead.data.job_title, lead.data.company?.name].filter(Boolean).join(' · ') || undefined"
         :back-href="routes.leads.index()"
         back-label="All leads"
     >
@@ -171,15 +169,22 @@ function destroy() {
                         </div>
 
                         <div>
-                            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Contact</p>
-                            <Link
-                                v-if="lead.data.contact"
-                                :href="routes.contacts.show(lead.data.contact.id)"
+                            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Email</p>
+                            <a
+                                v-if="lead.data.email"
+                                :href="`mailto:${lead.data.email}`"
                                 class="mt-1 block text-sm font-medium text-indigo-600 hover:text-indigo-800"
                             >
-                                {{ lead.data.contact.full_name }}
-                            </Link>
-                            <p v-else class="mt-1 text-sm text-slate-400">Not set</p>
+                                {{ lead.data.email }}
+                            </a>
+                            <p v-else class="mt-1 text-sm text-amber-600">
+                                Not set — no email can be generated
+                            </p>
+                        </div>
+
+                        <div>
+                            <p class="text-xs font-medium uppercase tracking-wide text-slate-500">Phone</p>
+                            <p class="mt-1 text-sm text-slate-700">{{ lead.data.phone ?? '—' }}</p>
                         </div>
                     </div>
 

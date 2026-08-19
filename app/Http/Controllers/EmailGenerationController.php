@@ -26,8 +26,8 @@ use Illuminate\Http\RedirectResponse;
  *   1. The recommendation must be one the user ACCEPTED, and it must belong to
  *      this lead. Section 5 of the brief - the email follows the approved sales
  *      direction rather than the model picking a product for itself.
- *   2. There must be somebody to write to. A lead with no contact email cannot
- *      produce a sendable email, so it does not produce one at all.
+ *   2. There must be somebody to write to. A lead with no email address
+ *      cannot produce a sendable email, so it does not produce one at all.
  */
 class EmailGenerationController extends Controller
 {
@@ -170,14 +170,14 @@ class EmailGenerationController extends Controller
     /** The essential information, absent which no usable email can be written. */
     private function missingEssentials(Lead $lead): ?string
     {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
-        if ($lead->contact === null) {
-            return 'This lead has no contact. Add the person you want to write to first.';
+        if (! $lead->isNamed()) {
+            return 'This lead has no name yet. Add the person you want to write to first.';
         }
 
-        if (blank($lead->contact->email)) {
-            return 'That contact has no email address. Add one before generating an email.';
+        if (blank($lead->email)) {
+            return 'This lead has no email address. Add one before generating an email.';
         }
 
         if ($lead->company === null) {

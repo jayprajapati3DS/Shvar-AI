@@ -29,7 +29,6 @@ class FollowUpTask extends Model
 
     protected $fillable = [
         'lead_id',
-        'contact_id',
         'email_reply_id',
         'title',
         'notes',
@@ -54,12 +53,6 @@ class FollowUpTask extends Model
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);
-    }
-
-    /** @return BelongsTo<Contact, $this> */
-    public function contact(): BelongsTo
-    {
-        return $this->belongsTo(Contact::class);
     }
 
     /** The reply that prompted it, when there was one. */

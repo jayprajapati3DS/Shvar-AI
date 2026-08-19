@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Database\Factories;
 
+use App\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
-/** @extends Factory<\App\Models\Product> */
+/** @extends Factory<Product> */
 class ProductFactory extends Factory
 {
     /** @return array<string, mixed> */

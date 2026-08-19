@@ -6,7 +6,6 @@ namespace Tests\Feature\Email;
 
 use App\Enums\RecommendationStatus;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\EmailGeneration;
 use App\Models\Lead;
 use App\Models\LeadProductMatch;
@@ -46,15 +45,10 @@ class MultiProductEmailTest extends TestCase
             'description' => 'Develops patient-specific cranial implants.',
         ]);
 
-        $contact = Contact::factory()->create([
+        $this->lead = Lead::factory()->create([
             'company_id' => $company->id,
             'first_name' => 'Dana',
             'email' => 'dana@craniofax.example',
-        ]);
-
-        $this->lead = Lead::factory()->create([
-            'company_id' => $company->id,
-            'contact_id' => $contact->id,
         ]);
 
         foreach ([

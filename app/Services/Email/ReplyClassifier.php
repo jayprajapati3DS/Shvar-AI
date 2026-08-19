@@ -52,7 +52,7 @@ class ReplyClassifier
      */
     public function classify(EmailReply $reply, bool $suggestFollowUp = true): array
     {
-        $reply->loadMissing(['contact', 'lead.company', 'draft']);
+        $reply->loadMissing(['lead.company', 'draft']);
 
         $result = $this->ai->generateStructured(
             $this->prompts->replyClassification(
@@ -140,7 +140,6 @@ class ReplyClassifier
 
         return FollowUpTask::create([
             'lead_id' => $reply->lead_id,
-            'contact_id' => $reply->contact_id,
             'email_reply_id' => $reply->id,
             'title' => mb_strimwidth($title, 0, 200, '...'),
             'notes' => is_array($followUp) ? $this->text($followUp['reason'] ?? null) : null,
@@ -183,7 +182,7 @@ class ReplyClassifier
             '=== CONTEXT ===',
             'From: '.($reply->from_name ?? $reply->from_address),
             'Their company: '.($reply->lead?->company?->name ?? '(not recorded)'),
-            'Their role: '.($reply->contact?->job_title ?? '(not recorded)'),
+            'Their role: '.($reply->lead?->job_title ?? '(not recorded)'),
             'Subject: '.($reply->subject ?? '(none)'),
         ];
 

@@ -131,7 +131,7 @@ class EmailPrivacyTest extends TestCase
         );
     }
 
-    public function test_reading_the_mailbox_is_scoped_to_crm_contacts(): void
+    public function test_reading_the_mailbox_is_scoped_to_people_in_the_crm(): void
     {
         // The scope lives in OutlookMailboxSync and it is the narrowest part of
         // the whole feature: the mailbox holds thousands of unrelated messages.
@@ -139,7 +139,7 @@ class EmailPrivacyTest extends TestCase
         // be deliberate.
         $sync = (string) file_get_contents(app_path('Services/Email/Outlook/OutlookMailboxSync.php'));
 
-        $this->assertStringContainsString('contactsByAddress', $sync);
+        $this->assertStringContainsString('leadsByAddress', $sync);
         $this->assertStringContainsString('whereNotNull(\'email\')', $sync);
 
         // The gateway is only ever asked for messages from an explicit address

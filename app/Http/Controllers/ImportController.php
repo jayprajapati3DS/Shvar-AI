@@ -59,7 +59,7 @@ class ImportController extends Controller
         return to_route('leads.index')->with(
             'success',
             "Imported {$result['imported']} lead(s): {$result['companies']} new "
-            ."compan(ies), {$result['contacts']} new contact(s). {$result['skipped']} row(s) skipped."
+            ."compan(ies). {$result['skipped']} row(s) skipped."
         );
     }
 

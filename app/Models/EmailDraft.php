@@ -28,7 +28,6 @@ class EmailDraft extends Model
     protected $fillable = [
         'email_generation_id',
         'lead_id',
-        'contact_id',
         'product_id',
         'lead_product_match_id',
         'variant',
@@ -77,12 +76,6 @@ class EmailDraft extends Model
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);
-    }
-
-    /** @return BelongsTo<Contact, $this> */
-    public function contact(): BelongsTo
-    {
-        return $this->belongsTo(Contact::class);
     }
 
     /** @return BelongsTo<Product, $this> */

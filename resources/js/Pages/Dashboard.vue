@@ -69,7 +69,7 @@ const priorityRows: { key: Priority; color: BadgeColor }[] = [
     <template v-else>
         <section class="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard label="Companies" :value="summary.companies" accent="slate" :href="routes.companies.index()" />
-            <StatCard label="Contacts" :value="summary.contacts" accent="slate" :href="routes.contacts.index()" />
+            <StatCard label="Contacts" :value="summary.contacts" accent="slate" :href="routes.leads.index()" />
             <StatCard label="Total Leads" :value="summary.leads" accent="indigo" :href="routes.leads.index()" />
             <StatCard label="New Leads" :value="summary.new_leads" accent="sky" :href="routes.leads.index({ status: 'New' })" />
             <StatCard label="Qualified" :value="summary.qualified_leads" accent="indigo" :href="routes.leads.index({ status: 'Qualified' })" />
@@ -183,7 +183,7 @@ const priorityRows: { key: Priority; color: BadgeColor }[] = [
                         </span>
 
                         <span class="min-w-0 flex-1 truncate text-sm text-slate-500">
-                            {{ lead.contact?.full_name ?? 'No contact' }}
+                            {{ lead.full_name }}
                         </span>
 
                         <Badge :color="lead.status_color" size="sm">{{ lead.lead_status }}</Badge>

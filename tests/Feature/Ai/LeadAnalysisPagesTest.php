@@ -8,7 +8,6 @@ use App\Enums\RecommendationStatus;
 use App\Enums\RecommendationType;
 use App\Models\Activity;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\LeadAnalysis;
 use App\Models\LeadProductMatch;
@@ -47,7 +46,6 @@ class LeadAnalysisPagesTest extends TestCase
 
         $this->lead = Lead::factory()->create([
             'company_id' => $company->id,
-            'contact_id' => Contact::factory()->create(['company_id' => $company->id])->id,
         ]);
     }
 

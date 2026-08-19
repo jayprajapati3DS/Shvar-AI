@@ -133,7 +133,7 @@ function destroy() {
                                 {{ lead.company?.name ?? 'No company' }}
                             </span>
                             <span class="min-w-0 flex-1 truncate text-sm text-slate-500">
-                                {{ lead.contact?.full_name ?? 'No contact' }}
+                                {{ lead.full_name }}
                             </span>
                             <Badge :color="lead.status_color" size="sm">{{ lead.lead_status }}</Badge>
                         </Link>

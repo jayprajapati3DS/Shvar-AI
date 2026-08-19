@@ -7,7 +7,6 @@ namespace Tests\Feature\Email;
 use App\Enums\EmailDraftStatus;
 use App\Enums\EmailVariant;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\EmailDraft;
 use App\Models\Lead;
 use App\Models\Product;
@@ -46,15 +45,11 @@ class SmtpSendingTest extends TestCase
 
         $product = Product::factory()->create(['name' => '3dsurgical Platform']);
         $company = Company::factory()->create(['name' => 'Craniofax Implants']);
-        $contact = Contact::factory()->create([
-            'company_id' => $company->id,
-            'first_name' => 'Dana',
-            'email' => 'dana@craniofax.example',
-        ]);
 
         $lead = Lead::factory()->create([
             'company_id' => $company->id,
-            'contact_id' => $contact->id,
+            'first_name' => 'Dana',
+            'email' => 'dana@craniofax.example',
         ]);
 
         $body = "Hi Dana,\n\nA note about surgeon review of patient-specific cases.\n\n"
@@ -62,7 +57,6 @@ class SmtpSendingTest extends TestCase
 
         $this->draft = EmailDraft::create([
             'lead_id' => $lead->id,
-            'contact_id' => $contact->id,
             'product_id' => $product->id,
             'variant' => EmailVariant::ProfessionalDirect,
             'status' => EmailDraftStatus::Draft,

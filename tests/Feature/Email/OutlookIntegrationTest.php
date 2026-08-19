@@ -8,7 +8,6 @@ use App\Enums\EmailDraftStatus;
 use App\Enums\EmailVariant;
 use App\Models\Activity;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\EmailDraft;
 use App\Models\EmailReply;
 use App\Models\Lead;
@@ -52,8 +51,6 @@ class OutlookIntegrationTest extends TestCase
 
     private EmailDraft $draft;
 
-    private Contact $contact;
-
     private Lead $lead;
 
     protected function setUp(): void
@@ -68,23 +65,17 @@ class OutlookIntegrationTest extends TestCase
         $product = Product::factory()->create(['name' => '3dsurgical Platform']);
         $company = Company::factory()->create(['name' => 'Craniofax Implants']);
 
-        $this->contact = Contact::factory()->create([
+        $this->lead = Lead::factory()->create([
             'company_id' => $company->id,
             'first_name' => 'Dana',
             'last_name' => 'Whitfield',
             'email' => 'dana@craniofax.example',
         ]);
 
-        $this->lead = Lead::factory()->create([
-            'company_id' => $company->id,
-            'contact_id' => $this->contact->id,
-        ]);
-
         $body = "Hi Dana,\n\nA note about surgeon review.\n\nWould you be open to a call?\n\nBest regards,";
 
         $this->draft = EmailDraft::create([
             'lead_id' => $this->lead->id,
-            'contact_id' => $this->contact->id,
             'product_id' => $product->id,
             'variant' => EmailVariant::ProfessionalDirect,
             'status' => EmailDraftStatus::Draft,
@@ -305,7 +296,7 @@ class OutlookIntegrationTest extends TestCase
         $this->assertDatabaseCount('email_replies', 1);
     }
 
-    public function test_an_imported_reply_is_attached_to_the_contact_and_lead(): void
+    public function test_an_imported_reply_is_attached_to_its_lead(): void
     {
         $this->outlook->withInboxMessage([
             'from_address' => 'dana@craniofax.example',
@@ -318,7 +309,7 @@ class OutlookIntegrationTest extends TestCase
 
         $reply = EmailReply::first();
 
-        $this->assertSame($this->contact->id, $reply->contact_id);
+        $this->assertSame($this->lead->id, $reply->lead_id);
         $this->assertSame($this->lead->id, $reply->lead_id);
         $this->assertSame('Dana Whitfield', $reply->from_name);
     }
@@ -342,13 +333,13 @@ class OutlookIntegrationTest extends TestCase
         $this->assertSame($this->draft->id, EmailReply::first()->email_draft_id);
     }
 
-    public function test_a_contact_with_no_address_is_not_looked_for(): void
+    public function test_a_lead_with_no_address_is_not_looked_for(): void
     {
-        $this->contact->update(['email' => null]);
+        $this->lead->update(['email' => null]);
 
         $result = app(OutlookMailboxSync::class)->sync();
 
-        $this->assertSame(0, $result['contacts']);
+        $this->assertSame(0, $result['leads']);
         $this->assertStringContainsString('nothing to look for', $result['message']);
     }
 

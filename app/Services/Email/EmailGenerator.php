@@ -88,7 +88,7 @@ class EmailGenerator
         ?string $extraInstructions = null,
         ?EmailGeneration $replacing = null,
     ): EmailGeneration {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
         $set = $this->normalise($recommendations);
 
@@ -204,7 +204,6 @@ class EmailGenerator
 
             $generation = EmailGeneration::create([
                 'lead_id' => $lead->id,
-                'contact_id' => $lead->contact_id,
                 'product_id' => $recommendation->product_id,
                 'lead_product_match_id' => $recommendation->id,
                 'provider' => $result->provider,
@@ -236,7 +235,6 @@ class EmailGenerator
 
             return $generation->load([
                 'drafts.product',
-                'drafts.contact',
                 'product',
                 'recommendation',
                 'recommendations.product',
@@ -254,12 +252,9 @@ class EmailGenerator
         array $variant,
         AiResult $result,
     ): EmailDraft {
-        $contact = $lead->contact;
-
         $draft = EmailDraft::create([
             'email_generation_id' => $generation->id,
             'lead_id' => $lead->id,
-            'contact_id' => $lead->contact_id,
             'product_id' => $recommendation->product_id,
             'lead_product_match_id' => $recommendation->id,
 
@@ -276,10 +271,10 @@ class EmailGenerator
             'ai_subject' => $variant['subject'],
             'ai_body' => $variant['body'],
 
-            // Snapshotted so a sent record stays truthful if the contact is
+            // Snapshotted so a sent record stays truthful if the lead is
             // later edited or deleted.
-            'recipient_email' => $contact?->email,
-            'recipient_name' => $contact?->full_name,
+            'recipient_email' => $lead->email,
+            'recipient_name' => $lead->full_name,
 
             'personalization_points' => $generation->personalization_points,
             'word_count' => $variant['word_count'],

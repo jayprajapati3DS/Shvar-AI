@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature;
 
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -19,8 +18,8 @@ class CompanyTest extends TestCase
     public function test_index_lists_companies_with_relation_counts(): void
     {
         $company = Company::factory()->create(['name' => 'Acme Medical']);
-        Contact::factory()->count(2)->create(['company_id' => $company->id]);
-        Lead::factory()->count(3)->create(['company_id' => $company->id]);
+        // Five people at one account - the normal case now.
+        Lead::factory()->count(5)->create(['company_id' => $company->id]);
 
         $this->get(route('companies.index'))
             ->assertOk()
@@ -28,8 +27,9 @@ class CompanyTest extends TestCase
                 ->component('Companies/Index')
                 ->has('companies.data', 1)
                 ->where('companies.data.0.name', 'Acme Medical')
-                ->where('companies.data.0.contacts_count', 2)
-                ->where('companies.data.0.leads_count', 3));
+                ->where('companies.data.0.leads_count', 5)
+                // Every factory lead has an email, so all five are reachable.
+                ->where('companies.data.0.contactable_leads_count', 5));
     }
 
     public function test_index_can_be_searched_and_filtered(): void
@@ -85,11 +85,11 @@ class CompanyTest extends TestCase
         $this->assertSame('New Name', $company->fresh()->name);
     }
 
-    public function test_show_returns_contacts_leads_and_associated_products(): void
+    public function test_show_returns_leads_and_associated_products(): void
     {
         $company = Company::factory()->create();
-        $contact = Contact::factory()->create(['company_id' => $company->id]);
-        $lead = Lead::factory()->create(['company_id' => $company->id, 'contact_id' => $contact->id]);
+        $lead = Lead::factory()->create(['company_id' => $company->id,
+        ]);
 
         $product = Product::factory()->create(['name' => 'MySegmenter Test']);
         $lead->productMatches()->create(['product_id' => $product->id]);
@@ -98,16 +98,16 @@ class CompanyTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Companies/Show')
-                ->has('company.data.contacts', 1)
+                ->has('company.data.leads', 1)
                 ->has('company.data.leads', 1)
                 ->has('products.data', 1)
                 ->where('products.data.0.name', 'MySegmenter Test'));
     }
 
-    public function test_deleting_a_company_keeps_its_contacts_and_leads(): void
+    public function test_deleting_a_company_keeps_the_people_as_leads(): void
     {
         $company = Company::factory()->create();
-        $contact = Contact::factory()->create(['company_id' => $company->id]);
+        $contact = Lead::factory()->create(['company_id' => $company->id]);
         $lead = Lead::factory()->create(['company_id' => $company->id]);
 
         $this->delete(route('companies.destroy', $company))->assertRedirect();
@@ -115,7 +115,7 @@ class CompanyTest extends TestCase
         $this->assertDatabaseMissing('companies', ['id' => $company->id]);
 
         // nullOnDelete: the records survive, detached from the company.
-        $this->assertDatabaseHas('contacts', ['id' => $contact->id, 'company_id' => null]);
+        $this->assertDatabaseHas('leads', ['id' => $contact->id, 'company_id' => null]);
         $this->assertDatabaseHas('leads', ['id' => $lead->id, 'company_id' => null]);
     }
 

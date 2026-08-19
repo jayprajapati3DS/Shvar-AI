@@ -71,15 +71,13 @@ class EmailDraftResource extends JsonResource
                 'category' => $this->product->category,
             ]),
 
-            'contact' => $this->whenLoaded('contact', fn () => $this->contact === null ? null : [
-                'id' => $this->contact->id,
-                'name' => $this->contact->full_name,
-                'email' => $this->contact->email,
-                'job_title' => $this->contact->job_title,
-            ]),
-
+            // The lead carries the person now, so this one relation answers
+            // both "who is this to" and "which account is it for".
             'lead' => $this->whenLoaded('lead', fn () => [
                 'id' => $this->lead->id,
+                'name' => $this->lead->full_name,
+                'email' => $this->lead->email,
+                'job_title' => $this->lead->job_title,
                 'status' => $this->lead->lead_status->value,
                 'company' => $this->lead->relationLoaded('company') && $this->lead->company !== null
                     ? ['id' => $this->lead->company->id, 'name' => $this->lead->company->name]

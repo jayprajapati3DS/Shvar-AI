@@ -24,10 +24,10 @@ class LeadContextBuilder
 
     public function render(Lead $lead): string
     {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
         $company = $lead->company;
-        $contact = $lead->contact;
+        $contact = $lead;
 
         $lines = [];
 
@@ -73,10 +73,10 @@ class LeadContextBuilder
      */
     public function evidenceStrength(Lead $lead): float
     {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
         $company = $lead->company;
-        $contact = $lead->contact;
+        $contact = $lead;
 
         $weighted = [
             // The substance a match can actually be argued from.
@@ -112,7 +112,7 @@ class LeadContextBuilder
      */
     public function gaps(Lead $lead): array
     {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
         $checks = [
             'Company description' => $lead->company?->description,
@@ -120,7 +120,7 @@ class LeadContextBuilder
             'Company type' => $lead->company?->company_type,
             'What the company sells (products/services)' => $lead->company?->products_services,
             'Clinical specialties' => $lead->company?->specialties,
-            'Contact job title' => $lead->contact?->job_title,
+            'Contact job title' => $lead->job_title,
         ];
 
         return array_values(array_keys(array_filter($checks, fn ($value) => blank($value))));

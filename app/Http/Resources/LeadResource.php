@@ -17,7 +17,20 @@ class LeadResource extends JsonResource
         return [
             'id' => $this->id,
             'company_id' => $this->company_id,
-            'contact_id' => $this->contact_id,
+            // The person. A lead IS the contact now.
+            'first_name' => $this->first_name,
+            'last_name' => $this->last_name,
+            'full_name' => $this->full_name,
+            'job_title' => $this->job_title,
+            'department' => $this->department,
+            'email' => $this->email,
+            'phone' => $this->phone,
+            'linkedin_url' => $this->linkedin_url,
+            'country' => $this->country,
+            'city' => $this->city,
+            'is_named' => $this->isNamed(),
+            'is_contactable' => $this->isContactable(),
+
             'lead_source' => $this->lead_source,
 
             'lead_status' => $this->lead_status->value,
@@ -29,7 +42,6 @@ class LeadResource extends JsonResource
             'notes' => $this->notes,
 
             'company' => new CompanyResource($this->whenLoaded('company')),
-            'contact' => new ContactResource($this->whenLoaded('contact')),
             'product_matches' => LeadProductMatchResource::collection($this->whenLoaded('productMatches')),
             'activities' => ActivityResource::collection($this->whenLoaded('activities')),
 

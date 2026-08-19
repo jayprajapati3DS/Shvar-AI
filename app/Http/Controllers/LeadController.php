@@ -11,7 +11,6 @@ use App\Enums\Priority;
 use App\Enums\RecommendationStatus;
 use App\Http\Requests\BulkLeadActionRequest;
 use App\Http\Requests\StoreLeadRequest;
-use App\Http\Resources\ContactResource;
 use App\Http\Resources\EmailDraftResource;
 use App\Http\Resources\EmailGenerationResource;
 use App\Http\Resources\LeadAnalysisResource;
@@ -19,7 +18,6 @@ use App\Http\Resources\LeadResource;
 use App\Http\Resources\ProductResource;
 use App\Models\Activity;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\EmailDraft;
 use App\Models\EmailGeneration;
 use App\Models\Lead;
@@ -52,7 +50,6 @@ class LeadController extends Controller
         $leads = Lead::query()
             ->with([
                 'company:id,name,country,city',
-                'contact:id,first_name,last_name,job_title,email',
                 'productMatches.product:id,name',
             ])
             ->withCount('productMatches')
@@ -73,9 +70,14 @@ class LeadController extends Controller
                 'sources' => $this->sourceOptions(),
             ],
             // The "New lead" modal lives on this page, so it needs the full
-            // form payload (contacts included), not just the filter lists.
+            // form payload, not just the filter lists.
             'options' => $this->formOptions(),
-            'bulkFields' => Lead::bulkFieldsForUi(),
+            // The company list is data rather than an enum, so it is injected
+            // here. Moving a batch of people onto the right account is the
+            // tidy-up the merged model creates most often.
+            'bulkFields' => Lead::bulkFieldsForUi([
+                'company_id' => $this->companyOptions(),
+            ]),
         ]);
     }
 
@@ -83,7 +85,7 @@ class LeadController extends Controller
     {
         $lead->load([
             'company',
-            'contact.company:id,name',
+            'company',
             // Newest first so the AI's own ordering (priority, then confidence)
             // is preserved within a run while the latest run leads.
             'productMatches' => fn ($q) => $q->with('product')->latest('id'),
@@ -228,7 +230,7 @@ class LeadController extends Controller
      */
     private function emailPanel(Lead $lead): array
     {
-        $lead->loadMissing(['company', 'contact']);
+        $lead->loadMissing('company');
 
         $drafts = EmailDraft::query()
             ->where('lead_id', $lead->id)
@@ -254,10 +256,10 @@ class LeadController extends Controller
 
         $blockers = [];
 
-        if ($lead->contact === null) {
-            $blockers[] = 'This lead has no contact. Add the person you want to write to.';
-        } elseif (blank($lead->contact->email)) {
-            $blockers[] = 'That contact has no email address.';
+        if (! $lead->isNamed()) {
+            $blockers[] = 'This lead has no name yet. Add the person you want to write to.';
+        } elseif (blank($lead->email)) {
+            $blockers[] = 'This lead has no email address.';
         }
 
         if ($lead->company === null) {
@@ -303,9 +305,6 @@ class LeadController extends Controller
             'priorities' => Priority::options(),
             'sources' => LeadSource::options(),
             'companies' => $this->companyOptions(),
-            'contacts' => ContactResource::collection(
-                Contact::with('company:id,name')->orderBy('first_name')->get()
-            ),
         ];
     }
 

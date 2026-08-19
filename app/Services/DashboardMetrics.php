@@ -6,8 +6,8 @@ namespace App\Services;
 
 use App\Enums\LeadStatus;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -40,7 +40,7 @@ class DashboardMetrics
 
         return [
             'companies' => Company::count(),
-            'contacts' => Contact::count(),
+            'contactable_leads' => Lead::whereNotNull('email')->where('email', '!=', '')->count(),
             'leads' => array_sum($byStatus),
             'new_leads' => $byStatus[LeadStatus::New->value] ?? 0,
             'qualified_leads' => $byStatus[LeadStatus::Qualified->value] ?? 0,
@@ -76,12 +76,12 @@ class DashboardMetrics
     /**
      * Leads touched most recently, for the dashboard activity panel.
      *
-     * @return \Illuminate\Support\Collection<int, Lead>
+     * @return Collection<int, Lead>
      */
     public function recentLeads(int $limit = 8)
     {
         return Lead::query()
-            ->with(['company:id,name,country', 'contact:id,first_name,last_name,job_title'])
+            ->with('company:id,name,country')
             ->latest('updated_at')
             ->limit($limit)
             ->get();

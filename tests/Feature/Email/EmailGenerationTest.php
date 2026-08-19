@@ -11,7 +11,6 @@ use App\Enums\EmailVariant;
 use App\Enums\RecommendationStatus;
 use App\Models\AiRequest;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\EmailDraft;
 use App\Models\EmailGeneration;
 use App\Models\Lead;
@@ -67,17 +66,12 @@ class EmailGenerationTest extends TestCase
             'description' => 'Develops patient-specific cranial implants.',
         ]);
 
-        $contact = Contact::factory()->create([
+        $this->lead = Lead::factory()->create([
             'company_id' => $company->id,
             'first_name' => 'Dana',
             'last_name' => 'Whitfield',
             'job_title' => 'Head of Design Engineering',
             'email' => 'dana@craniofax.example',
-        ]);
-
-        $this->lead = Lead::factory()->create([
-            'company_id' => $company->id,
-            'contact_id' => $contact->id,
         ]);
 
         $this->recommendation = LeadProductMatch::create([
@@ -227,7 +221,7 @@ class EmailGenerationTest extends TestCase
         $this->assertSame('dana@craniofax.example', $draft->recipient_email);
         $this->assertSame('Dana Whitfield', $draft->recipient_name);
 
-        $this->lead->contact->update(['email' => 'someone.else@craniofax.example']);
+        $this->lead->update(['email' => 'someone.else@craniofax.example']);
 
         $this->assertSame('dana@craniofax.example', $draft->fresh()->recipient_email);
     }
@@ -424,7 +418,7 @@ class EmailGenerationTest extends TestCase
     public function test_a_lead_with_no_contact_email_is_refused_with_an_explanation(): void
     {
         $this->fakeAi($this->goodPayload());
-        $this->lead->contact->update(['email' => null]);
+        $this->lead->update(['email' => null]);
 
         $this->post(route('leads.emails.generate', $this->lead), [
             'recommendation_id' => $this->recommendation->id,
@@ -434,16 +428,16 @@ class EmailGenerationTest extends TestCase
         $this->assertDatabaseCount('email_drafts', 0);
     }
 
-    public function test_a_lead_with_no_contact_is_refused(): void
+    public function test_a_lead_with_no_name_is_refused(): void
     {
         $this->fakeAi($this->goodPayload());
-        $this->lead->update(['contact_id' => null]);
+        $this->lead->update(['first_name' => null, 'last_name' => null]);
 
         $this->post(route('leads.emails.generate', $this->lead), [
             'recommendation_id' => $this->recommendation->id,
         ])->assertRedirect();
 
-        $this->assertStringContainsString('no contact', (string) session('error'));
+        $this->assertStringContainsString('no name yet', (string) session('error'));
         $this->assertDatabaseCount('email_drafts', 0);
     }
 

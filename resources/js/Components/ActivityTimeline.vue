@@ -15,7 +15,7 @@ import type { Activity, BadgeColor, SelectOption } from '@/types/models';
  */
 const { activities, subject, subjectId, types } = defineProps<{
     activities: Activity[];
-    subject: 'leads' | 'companies' | 'contacts';
+    subject: 'leads' | 'companies';
     subjectId: number;
     /** Manual entry types; omit to render the timeline read-only. */
     types?: SelectOption[];

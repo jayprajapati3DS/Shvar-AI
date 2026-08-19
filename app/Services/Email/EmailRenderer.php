@@ -44,7 +44,7 @@ class EmailRenderer
      */
     public function render(EmailDraft $draft): array
     {
-        $draft->loadMissing('contact');
+        $draft->loadMissing('lead');
 
         $body = trim((string) $draft->body);
         $signature = $this->settings->signature();
@@ -52,8 +52,8 @@ class EmailRenderer
         return [
             'from' => $this->settings->senderEmail(),
             'from_name' => $this->settings->senderName(),
-            'to' => $draft->recipient_email ?? $draft->contact?->email,
-            'to_name' => $draft->recipient_name ?? $draft->contact?->full_name,
+            'to' => $draft->recipient_email ?? $draft->lead?->email,
+            'to_name' => $draft->recipient_name ?? $draft->lead?->full_name,
             'subject' => trim((string) $draft->subject),
             'body' => $this->withSignature($body, $signature),
             'signature' => $signature,

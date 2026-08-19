@@ -27,7 +27,6 @@ class EmailGeneration extends Model
 {
     protected $fillable = [
         'lead_id',
-        'contact_id',
         'product_id',
         'lead_product_match_id',
         'provider',
@@ -61,12 +60,6 @@ class EmailGeneration extends Model
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class);
-    }
-
-    /** @return BelongsTo<Contact, $this> */
-    public function contact(): BelongsTo
-    {
-        return $this->belongsTo(Contact::class);
     }
 
     /** @return BelongsTo<Product, $this> */

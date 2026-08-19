@@ -9,7 +9,6 @@ use App\Enums\EmailDraftStatus;
 use App\Enums\EmailVariant;
 use App\Models\Activity;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\EmailDraft;
 use App\Models\EmailDraftVersion;
 use App\Models\Lead;
@@ -48,16 +47,12 @@ class EmailApprovalTest extends TestCase
 
         $product = Product::factory()->create(['name' => '3dsurgical Platform']);
         $company = Company::factory()->create(['name' => 'Craniofax Implants']);
-        $contact = Contact::factory()->create([
+
+        $this->lead = Lead::factory()->create([
             'company_id' => $company->id,
             'first_name' => 'Dana',
             'last_name' => 'Whitfield',
             'email' => 'dana@craniofax.example',
-        ]);
-
-        $this->lead = Lead::factory()->create([
-            'company_id' => $company->id,
-            'contact_id' => $contact->id,
         ]);
 
         $body = "Hi Dana,\n\nI work with teams designing patient-specific implants. Our platform "
@@ -66,7 +61,6 @@ class EmailApprovalTest extends TestCase
 
         $this->draft = EmailDraft::create([
             'lead_id' => $this->lead->id,
-            'contact_id' => $contact->id,
             'product_id' => $product->id,
             'variant' => EmailVariant::ProfessionalDirect,
             'status' => EmailDraftStatus::Draft,
@@ -222,7 +216,7 @@ class EmailApprovalTest extends TestCase
     public function test_a_draft_with_no_recipient_cannot_be_approved(): void
     {
         $this->draft->update(['recipient_email' => null]);
-        $this->lead->contact->update(['email' => null]);
+        $this->lead->update(['email' => null]);
 
         $this->post(route('email-drafts.approve', $this->draft))->assertRedirect();
 

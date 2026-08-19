@@ -61,8 +61,8 @@ function destroy() {
             <div class="mt-2 flex flex-wrap items-center gap-2">
                 <Badge v-if="company.data.industry" color="sky">{{ company.data.industry }}</Badge>
                 <Badge v-if="company.data.company_type" color="indigo">{{ company.data.company_type }}</Badge>
-                <Badge color="slate">{{ company.data.contacts?.length ?? 0 }} contact(s)</Badge>
-                <Badge color="slate">{{ company.data.leads?.length ?? 0 }} lead(s)</Badge>
+                <Badge :color="company.data.status_color ?? 'slate'">{{ company.data.status ?? 'Prospect' }}</Badge>
+                <Badge color="slate">{{ company.data.leads?.length ?? 0 }} person/people</Badge>
             </div>
         </template>
 
@@ -93,40 +93,10 @@ function destroy() {
                 :enabled="research.enabled"
             />
 
-            <!-- Contacts -->
-            <section class="card">
-                <header class="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-                    <h2 class="text-sm font-semibold text-slate-900">Contacts</h2>
-                    <Link :href="routes.contacts.index({ company_id: company.data.id })" class="text-xs font-medium text-indigo-600 hover:text-indigo-800">
-                        Manage
-                    </Link>
-                </header>
-
-                <EmptyState
-                    v-if="!company.data.contacts?.length"
-                    icon="user"
-                    title="No contacts"
-                    message="No one at this company has been recorded yet."
-                />
-
-                <ul v-else class="divide-y divide-slate-100">
-                    <li v-for="contact in company.data.contacts" :key="contact.id">
-                        <Link
-                            :href="routes.contacts.show(contact.id)"
-                            class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 transition-colors hover:bg-slate-50"
-                        >
-                            <span class="min-w-0 flex-1 text-sm font-medium text-slate-900">{{ contact.full_name }}</span>
-                            <span class="min-w-0 flex-1 truncate text-sm text-slate-500">{{ contact.job_title ?? '—' }}</span>
-                            <span class="min-w-0 flex-1 truncate text-xs text-slate-400">{{ contact.email ?? '—' }}</span>
-                        </Link>
-                    </li>
-                </ul>
-            </section>
-
             <!-- Leads -->
             <section class="card">
                 <header class="flex items-center justify-between border-b border-slate-200 px-5 py-3.5">
-                    <h2 class="text-sm font-semibold text-slate-900">Associated Leads</h2>
+                    <h2 class="text-sm font-semibold text-slate-900">People at this company</h2>
                     <Link :href="routes.leads.index({ company_id: company.data.id })" class="text-xs font-medium text-indigo-600 hover:text-indigo-800">
                         Manage
                     </Link>
@@ -135,8 +105,8 @@ function destroy() {
                 <EmptyState
                     v-if="!company.data.leads?.length"
                     icon="inbox"
-                    title="No leads"
-                    message="No opportunity has been opened against this company."
+                    title="Nobody here yet"
+                    message="Add the people you are working at this company. Each one is a lead."
                 />
 
                 <ul v-else class="divide-y divide-slate-100">
@@ -145,8 +115,17 @@ function destroy() {
                             :href="routes.leads.show(lead.id)"
                             class="flex flex-wrap items-center gap-x-3 gap-y-1 px-5 py-3 transition-colors hover:bg-slate-50"
                         >
-                            <span class="min-w-0 flex-1 truncate text-sm text-slate-700">
-                                {{ lead.contact?.full_name ?? 'No contact' }}
+                            <span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-900">
+                                {{ lead.full_name }}
+                            </span>
+                            <span class="min-w-0 flex-1 truncate text-xs text-slate-500">
+                                {{ lead.job_title ?? '—' }}
+                            </span>
+                            <span
+                                class="min-w-0 flex-1 truncate text-xs"
+                                :class="lead.is_contactable ? 'text-slate-400' : 'text-amber-600'"
+                            >
+                                {{ lead.email ?? 'no email' }}
                             </span>
                             <Badge :color="lead.status_color" size="sm">{{ lead.lead_status }}</Badge>
                             <Badge :color="lead.priority_color" size="sm">{{ lead.priority }}</Badge>
@@ -218,7 +197,7 @@ function destroy() {
     <ConfirmDialog
         :open="confirmingDelete"
         :title="`Delete ${company.data.name}?`"
-        message="The company record is removed. Its contacts and leads are kept, but will no longer be linked to a company."
+        message="The company record is removed. The people you were working there are kept as leads, but will no longer be linked to a company."
         :processing="processing"
         @cancel="confirmingDelete = false"
         @confirm="destroy"

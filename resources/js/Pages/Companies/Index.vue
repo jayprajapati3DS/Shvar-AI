@@ -32,7 +32,7 @@ const columns: Column[] = [
     { label: 'City' },
     { label: 'Industry' },
     { label: 'Company Type' },
-    { label: 'Contacts', class: 'text-right' },
+    { label: 'People', class: 'text-right' },
     { label: 'Leads', class: 'text-right' },
     { label: 'Created' },
     { label: 'Actions', class: 'text-right', hidden: true },
@@ -157,7 +157,7 @@ function formatDate(value: string | null): string {
                     <td class="td">{{ row.city ?? '—' }}</td>
                     <td class="td">{{ row.industry ?? '—' }}</td>
                     <td class="td">{{ row.company_type ?? '—' }}</td>
-                    <td class="td text-right tabular-nums">{{ row.contacts_count ?? 0 }}</td>
+                    <td class="td text-right tabular-nums">{{ row.leads_count ?? 0 }}</td>
                     <td class="td text-right tabular-nums">{{ row.leads_count ?? 0 }}</td>
                     <td class="td whitespace-nowrap text-slate-500">{{ formatDate(row.created_at) }}</td>
                     <td class="td text-right whitespace-nowrap">

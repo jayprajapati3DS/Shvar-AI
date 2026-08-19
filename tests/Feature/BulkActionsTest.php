@@ -9,7 +9,6 @@ use App\Enums\LeadStatus;
 use App\Enums\Priority;
 use App\Models\Activity;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\Lead;
 use App\Models\Product;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -248,17 +247,15 @@ class BulkActionsTest extends TestCase
         $this->assertDatabaseCount('activities', 0);
     }
 
-    public function test_deleting_companies_keeps_their_contacts_and_leads(): void
+    public function test_deleting_companies_keeps_their_people_as_leads(): void
     {
         $company = Company::factory()->create();
-        $contact = Contact::factory()->create(['company_id' => $company->id]);
         $lead = Lead::factory()->create(['company_id' => $company->id]);
 
         $this->post(route('companies.bulk-destroy'), ['ids' => [$company->id]])
             ->assertRedirect();
 
         $this->assertDatabaseMissing('companies', ['id' => $company->id]);
-        $this->assertDatabaseHas('contacts', ['id' => $contact->id, 'company_id' => null]);
         $this->assertDatabaseHas('leads', ['id' => $lead->id, 'company_id' => null]);
     }
 
@@ -279,28 +276,28 @@ class BulkActionsTest extends TestCase
 
     // -------------------------------------------------- the other resources
 
-    public function test_bulk_update_moves_contacts_to_another_company(): void
+    public function test_bulk_update_moves_leads_to_another_company(): void
     {
         $from = Company::factory()->create();
         $to = Company::factory()->create();
-        $contacts = Contact::factory()->count(2)->create(['company_id' => $from->id]);
+        $leads = Lead::factory()->count(2)->create(['company_id' => $from->id]);
 
-        $this->post(route('contacts.bulk-update'), [
-            'ids' => $contacts->pluck('id')->all(),
+        $this->post(route('leads.bulk-update'), [
+            'ids' => $leads->pluck('id')->all(),
             'values' => ['company_id' => $to->id],
         ])->assertRedirect();
 
-        foreach ($contacts as $contact) {
-            $this->assertSame($to->id, $contact->fresh()->company_id);
+        foreach ($leads as $lead) {
+            $this->assertSame($to->id, $lead->fresh()->company_id);
         }
     }
 
-    public function test_a_contact_cannot_be_moved_to_a_company_that_does_not_exist(): void
+    public function test_a_lead_cannot_be_moved_to_a_company_that_does_not_exist(): void
     {
-        $contact = Contact::factory()->create();
+        $lead = Lead::factory()->create();
 
-        $this->post(route('contacts.bulk-update'), [
-            'ids' => [$contact->id],
+        $this->post(route('leads.bulk-update'), [
+            'ids' => [$lead->id],
             'values' => ['company_id' => 999_999],
         ])->assertSessionHasErrors('values.company_id');
     }
@@ -340,9 +337,8 @@ class BulkActionsTest extends TestCase
         Company::factory()->create();
 
         foreach ([
-            'companies.index' => ['industry', 'company_type', 'country', 'state', 'city'],
-            'contacts.index' => ['company_id', 'department', 'country', 'city'],
-            'leads.index' => ['lead_status', 'priority', 'lead_source', 'assigned_to'],
+            'companies.index' => ['status', 'industry', 'company_type', 'country', 'state', 'city'],
+            'leads.index' => ['lead_status', 'priority', 'lead_source', 'assigned_to', 'company_id', 'department', 'country', 'city'],
             'products.index' => ['category', 'active'],
         ] as $route => $expected) {
             $response = $this->get(route($route))->assertOk();
@@ -360,11 +356,11 @@ class BulkActionsTest extends TestCase
         }
     }
 
-    public function test_the_contact_company_dropdown_is_filled_from_real_companies(): void
+    public function test_the_lead_company_dropdown_is_filled_from_real_companies(): void
     {
         $company = Company::factory()->create(['name' => 'Northfield Ortho']);
 
-        $response = $this->get(route('contacts.index'))->assertOk();
+        $response = $this->get(route('leads.index'))->assertOk();
 
         $fields = collect($response->viewData('page')['props']['bulkFields'])
             ->keyBy('key');

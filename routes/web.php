@@ -5,7 +5,6 @@ declare(strict_types=1);
 use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompanyResearchController;
-use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmailDraftController;
 use App\Http\Controllers\EmailGenerationController;
@@ -41,7 +40,6 @@ Route::get('/', DashboardController::class)->name('dashboard');
 // ---- Fully implemented modules -------------------------------------------
 
 Route::resource('companies', CompanyController::class)->except(['create', 'edit']);
-Route::resource('contacts', ContactController::class)->except(['create', 'edit']);
 Route::resource('leads', LeadController::class)->except(['create', 'edit']);
 Route::resource('products', ProductController::class)->except(['create', 'edit']);
 
@@ -56,7 +54,6 @@ Route::resource('products', ProductController::class)->except(['create', 'edit']
 // consistently where DELETE-with-body is patchy.
 foreach ([
     'companies' => CompanyController::class,
-    'contacts' => ContactController::class,
     'leads' => LeadController::class,
     'products' => ProductController::class,
 ] as $resource => $controller) {
@@ -139,11 +136,11 @@ Route::post('email-drafts/{draft}/send', [EmailDraftController::class, 'send'])
 
 // Activity timeline, shared by leads / companies / contacts.
 Route::post('{subjectType}/{subjectId}/activities', [ActivityController::class, 'store'])
-    ->whereIn('subjectType', ['leads', 'companies', 'contacts'])
+    ->whereIn('subjectType', ['leads', 'companies'])
     ->whereNumber('subjectId')
     ->name('activities.store');
 Route::delete('{subjectType}/{subjectId}/activities/{activity}', [ActivityController::class, 'destroy'])
-    ->whereIn('subjectType', ['leads', 'companies', 'contacts'])
+    ->whereIn('subjectType', ['leads', 'companies'])
     ->whereNumber('subjectId')
     ->name('activities.destroy');
 

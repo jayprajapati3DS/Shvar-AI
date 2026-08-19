@@ -8,7 +8,6 @@ use App\Enums\EmailDraftStatus;
 use App\Enums\EmailVariant;
 use App\Enums\RecommendationStatus;
 use App\Models\Company;
-use App\Models\Contact;
 use App\Models\EmailDraft;
 use App\Models\Lead;
 use App\Models\LeadProductMatch;
@@ -51,15 +50,11 @@ class EmailStyleLearningTest extends TestCase
         ]);
 
         $company = Company::factory()->create(['name' => 'Craniofax Implants']);
-        $contact = Contact::factory()->create([
-            'company_id' => $company->id,
-            'first_name' => 'Dana',
-            'email' => 'dana@craniofax.example',
-        ]);
 
         $this->lead = Lead::factory()->create([
             'company_id' => $company->id,
-            'contact_id' => $contact->id,
+            'first_name' => 'Dana',
+            'email' => 'dana@craniofax.example',
         ]);
 
         $this->recommendation = LeadProductMatch::create([
@@ -88,7 +83,6 @@ class EmailStyleLearningTest extends TestCase
     ): EmailDraft {
         return EmailDraft::create([
             'lead_id' => $this->lead->id,
-            'contact_id' => $this->lead->contact_id,
             'product_id' => $this->recommendation->product_id,
             'variant' => $variant,
             'status' => $status,
