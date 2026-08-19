@@ -52,6 +52,10 @@ class AiProductMatcher implements ProductMatcher
         private readonly ProductContextBuilder $productContext,
         private readonly RecommendationSchema $schema,
         private readonly RecommendationValidator $validator,
+
+        // What the user has corrected on past recommendations. Contributes
+        // nothing until there are enough corrections to mean something.
+        private readonly RecommendationFeedback $feedback,
     ) {}
 
     /**
@@ -80,6 +84,7 @@ class AiProductMatcher implements ProductMatcher
         $prompt = $this->prompts->productRecommendation(
             $this->leadContext->render($lead),
             $this->productContext->render($catalogue),
+            $this->feedback->promptBlock(),
         );
 
         // Any AiException propagates to the controller, which turns it into a

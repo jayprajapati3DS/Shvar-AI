@@ -13,6 +13,7 @@ use App\Services\AI\AIServiceInterface;
 use App\Services\AI\AiSettings;
 use App\Services\AI\Exceptions\AiException;
 use App\Services\AI\PromptLibrary;
+use App\Services\AI\Recommendation\RecommendationFeedback;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -46,6 +47,12 @@ class AiSettingsController extends Controller
                 'timeout' => (int) config('ai.defaults.timeout'),
             ],
             'requestTypes' => AiRequestType::options(),
+
+            // What your corrections have taught the recommendation engine.
+            // Shown in full, prompt text included: a prompt that silently
+            // rewrites itself is how a system quietly gets worse in ways
+            // nobody can point at.
+            'feedback' => app(RecommendationFeedback::class)->toArray(),
             'stats' => $this->stats(),
             'environment' => $this->environment(),
         ]);

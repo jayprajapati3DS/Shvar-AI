@@ -155,8 +155,11 @@ class PromptLibrary
      * ProductContextBuilder from database rows - no product or company fact is
      * written into this class.
      */
-    public function productRecommendation(string $leadContext, string $portfolio): PromptTemplate
-    {
+    public function productRecommendation(
+        string $leadContext,
+        string $portfolio,
+        ?string $corrections = null,
+    ): PromptTemplate {
         return new PromptTemplate(
             name: 'product_recommendation',
             template: <<<'PROMPT'
@@ -167,6 +170,8 @@ class PromptLibrary
                 === MY PRODUCT PORTFOLIO (the only products you may recommend) ===
 
                 {{ portfolio }}
+
+                {{ corrections }}
 
                 === TASK ===
 
@@ -202,6 +207,14 @@ class PromptLibrary
         )->with([
             'lead_context' => $leadContext,
             'portfolio' => $portfolio,
+
+            // What the user has corrected before. A hint about where this model
+            // tends to go wrong, deliberately framed as a hint - it must never
+            // become a reason to recommend something the company data does not
+            // support.
+            'corrections' => filled($corrections)
+                ? trim((string) $corrections)
+                : '(no corrections recorded yet)',
         ]);
     }
 
