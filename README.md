@@ -170,13 +170,43 @@ php artisan migrate:fresh --seed
 ## 6. Running Laravel
 
 ```powershell
+.\start.ps1
+```
+
+→ <http://127.0.0.1:8000>. `Ctrl+C` stops it.
+
+That is the whole thing: it puts the right PHP first, checks Ollama is up, and starts the web
+server, the background AI worker and Vite together.
+
+**Why a script rather than a command.** There are three PHP installations on this machine and
+Windows picks the wrong one:
+
+| Location | Version | On which PATH |
+| --- | --- | --- |
+| `C:\xampp\php` | 8.1.25 | machine — resolves first, so this is what `php` means |
+| `C:\laragon\bin\php\php-8.1.10…` | 8.1.10 | user |
+| `C:\php` | **8.4.23** | none |
+
+Laravel 13 needs 8.4, so plain `php artisan` dies with a Composer `platform_check` error before it
+starts. Putting `C:\php` first in the machine PATH would fix that and change which PHP every other
+project on the laptop gets — a high price for one application. The script sets the PATH for its own
+process only, so XAMPP and Laragon keep the PHP they expect.
+
+If PowerShell refuses to run it, allow local scripts once, for your account only:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+### Doing it by hand
+
+```powershell
 $env:PATH = "C:\php;" + $env:PATH
 composer dev
 ```
 
-→ <http://127.0.0.1:8000>
-
-`composer dev` starts the web server, the Vite dev server **and a background queue worker**
+`composer dev` — which is what `start.ps1` ends up calling — starts the web server, the Vite dev
+server **and a background queue worker**
 together. The worker is what runs the slow AI actions — analysis, email generation, website
 research, reading a reply — outside the browser request, so the page stays usable while the local
 model works. See [Background AI work](#background-ai-work) below.
@@ -366,8 +396,7 @@ php artisan config:clear
 ### 6. Start Laravel
 
 ```powershell
-$env:PATH = "C:\php;" + $env:PATH
-composer dev
+.\start.ps1
 ```
 
 This starts the web server, Vite and the background queue worker together. `php artisan serve` on
