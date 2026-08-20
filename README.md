@@ -260,8 +260,7 @@ review the parsed preview → commit. Nothing is written until you confirm.
 
 ### Bulk actions
 
-Every list page (Leads, Companies, Contacts, Products) has a checkbox per row. Select some and a
-bar appears at the bottom of the screen offering **Edit fields** and **Delete**.
+Every list page has a checkbox per row. Select some and a bar appears at the bottom of the screen.
 
 - Selection survives paging and filtering. Select five leads on page 1, page forward, select three
   more, and act on all eight — the bar says how many are off-screen. The header checkbox is
@@ -269,12 +268,22 @@ bar appears at the bottom of the screen offering **Edit fields** and **Delete**.
 - **Edit fields** only offers fields that make sense set identically across many records. Names,
   emails, descriptions and notes are per-record and are deliberately absent.
 
-  | Page | Editable in bulk |
-  | --- | --- |
-  | Leads | Lead status, Priority, Lead source, Assigned to |
-  | Companies | Industry, Company type, Country, State, City |
-  | Contacts | Company, Department, Country, City |
-  | Products | Category, Active |
+  | Page | Editable in bulk | Delete |
+  | --- | --- | --- |
+  | Leads | Lead status, Priority, Lead source, Assigned to, Company, Department, Country, City | yes |
+  | Companies | Industry, Company type, Country, State, City | yes |
+  | Products | Category, Active | yes |
+  | Email Drafts | *nothing — see below* | yes |
+
+- **Email Drafts is delete-only, on purpose.** A draft is a subject and a body written for one
+  person; no field on it means the same thing across forty of them, so a bulk edit there would be a
+  way to overwrite forty emails with the same sentence. Delete exists because regenerating an email
+  three times leaves nine drafts, and clearing those one at a time is tedious enough that they get
+  left in the list instead.
+- Sent drafts **can** be deleted — refusing to let you delete your own records would be
+  presumptuous — but the confirmation counts them before you click and the result names them after,
+  because a sent draft is the only trace this application keeps of an email that genuinely left the
+  machine.
 
 - Each field has three explicit states: **Leave unchanged** (the default), **Set to…** and
   **Clear**. Blank never means "empty this column" — an untouched field is left exactly as it is on
@@ -711,6 +720,8 @@ npm run build           →  clean
 | `ProductTest` | seeder correctness + idempotence, filters, list-field splitting, cascade |
 | `CsvImportTest` | header matching, defaults, invalid rows, duplicates, BOM, blank lines, template |
 | `BulkActionsTest` | bulk edit whitelist, blank-is-not-clear, explicit clear, required fields unclearable, per-record timeline entries, bulk delete cascades |
+| `Email/BulkDeleteDraftsTest` | deleting a selection of drafts, sent ones counted and named, a stale id refused rather than silently dropped, and no bulk-edit route for drafts at all |
+| `Ai/BackgroundAiJobTest` | slow AI work queued rather than run, the row written before the job, the tray visible from any page, one run per record, stall detection that does not cry wolf, abandoned jobs reaped, and a progress estimate that learns this machine's real timings |
 | `Email/EmailGenerationTest` | three variants, everything starts as Draft, recipient snapshotting, prompt contents, schema forwarding, dropped placeholders and self-written signatures, stripped HTML, unsupported-claim flagging, regeneration history, and every failure mode |
 | `Email/EmailApprovalTest` | editing appends versions and never overwrites the AI original, approval sets the timestamp and logs an activity, editing revokes approval, unapproved drafts refuse to send at all three layers, simulated send writes only to the local log |
 | `Email/EmailSignatureAndQualityTest` | composed vs hand-written signature, blank-field handling, the signature being appended rather than stored, every quality check and its severity, settings whitelist and validation |

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { onUnmounted, watch } from 'vue';
+import { claimBottomBar, releaseBottomBar } from '@/composables/useBottomBar';
+
 /**
  * The bar that appears once rows are selected.
  *
@@ -25,6 +28,32 @@ const {
 }>();
 
 const emit = defineEmits<{ edit: []; delete: []; clear: [] }>();
+
+// Announce the bottom edge while this is visible, so the AI activity tray steps
+// up rather than covering the Delete button on a narrower screen.
+watch(
+    () => count > 0,
+    (shown, was) => {
+        if (shown === was) {
+            return;
+        }
+
+        if (shown) {
+            claimBottomBar();
+        } else {
+            releaseBottomBar();
+        }
+    },
+    { immediate: true },
+);
+
+// A page navigation unmounts this with the selection still non-empty, which
+// would otherwise leave the claim standing for ever.
+onUnmounted(() => {
+    if (count > 0) {
+        releaseBottomBar();
+    }
+});
 
 function plural(n: number, noun: string): string {
     return `${n} ${noun}${n === 1 ? '' : 's'}`;

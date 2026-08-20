@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useAiJobs } from '@/composables/useAiJobs';
+import { bottomBarVisible } from '@/composables/useBottomBar';
 import type { AiJob } from '@/types/models';
 
 /**
@@ -32,6 +33,20 @@ watch(
         }
     },
 );
+
+/**
+ * Open on its own when the queue turns out to be unattended.
+ *
+ * This is the one message here that the user has to act on, and leaving it
+ * folded away was worse than not showing it: collapsed, a stalled job looks
+ * exactly like a running one - a pulsing dot and a name - so the reasonable
+ * thing to do is wait, which is precisely the wrong thing.
+ */
+watch(stalled, (isStalled) => {
+    if (isStalled) {
+        expanded.value = true;
+    }
+});
 
 // Nothing left to show: fold away rather than leaving an empty panel.
 watch(visible, (shown) => {
@@ -66,7 +81,13 @@ const dot: Record<string, string> = {
 </script>
 
 <template>
-    <div v-if="visible" class="fixed bottom-4 right-4 z-50 w-[min(24rem,calc(100vw-2rem))]">
+    <!-- Lifts clear of the bulk-action bar when a list selection is active,
+         rather than landing on top of its Delete button. -->
+    <div
+        v-if="visible"
+        class="fixed right-4 z-50 w-[min(24rem,calc(100vw-2rem))] transition-[bottom] duration-200"
+        :class="bottomBarVisible ? 'bottom-24' : 'bottom-4'"
+    >
         <!-- Collapsed: one line, always the same place. -->
         <button
             v-if="!expanded"
@@ -74,15 +95,23 @@ const dot: Record<string, string> = {
             class="flex w-full items-center gap-2.5 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-left shadow-lg transition-shadow hover:shadow-xl"
             @click="expanded = true"
         >
+            <!-- Amber and still when nothing is coming for it. A pulsing dot
+                 says "working", and saying that would be untrue. -->
             <span
-                v-if="active.length"
+                v-if="stalled"
+                class="size-2 shrink-0 rounded-full bg-amber-500"
+                aria-hidden="true"
+            />
+            <span
+                v-else-if="active.length"
                 class="size-2 shrink-0 animate-pulse rounded-full bg-indigo-500"
                 aria-hidden="true"
             />
             <span v-else class="size-2 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
 
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-slate-800">
-                <template v-if="active.length === 1">{{ active[0]!.label }}</template>
+                <template v-if="stalled">Waiting - no worker running</template>
+                <template v-else-if="active.length === 1">{{ active[0]!.label }}</template>
                 <template v-else-if="active.length">{{ active.length }} AI jobs running</template>
                 <template v-else>{{ finished.length }} finished</template>
             </span>

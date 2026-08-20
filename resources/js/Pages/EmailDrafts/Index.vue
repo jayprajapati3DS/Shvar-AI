@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { computed, ref } from 'vue';
 import Badge from '@/Components/Badge.vue';
+import BulkActionBar from '@/Components/Bulk/BulkActionBar.vue';
+import ConfirmDialog from '@/Components/ConfirmDialog.vue';
 import DataTable from '@/Components/DataTable.vue';
 import EmptyState from '@/Components/EmptyState.vue';
 import FilterBar from '@/Components/FilterBar.vue';
 import PageHeader from '@/Components/PageHeader.vue';
 import Pagination from '@/Components/Pagination.vue';
+import { useBulkSelection } from '@/composables/useBulkSelection';
 import { routes } from '@/routes';
 import type { EmailDraft, Paginated, SelectOption } from '@/types/models';
 import type { Column } from '@/types/ui';
@@ -35,6 +39,55 @@ const columns: Column[] = [
 
 function formatDate(value: string | null): string {
     return value ? new Date(value).toLocaleDateString() : '—';
+}
+
+// Reads the rows through a getter so it re-derives after every filter change,
+// sort or page step. Ids that scroll out of view stay selected.
+const selection = useBulkSelection(() => drafts.data);
+const confirmingBulkDelete = ref(false);
+const processing = ref(false);
+
+/**
+ * How many of the selected drafts were actually sent.
+ *
+ * Named in the confirmation rather than left to the message afterwards. A sent
+ * draft is the only trace this application keeps of an email that genuinely
+ * left the machine, and "you are about to delete three of those" is worth
+ * knowing BEFORE the click, not after it.
+ */
+const selectedSentCount = computed(
+    () => drafts.data.filter((d) => selection.isSelected(d.id) && d.status === 'Sent').length,
+);
+
+const deleteMessage = computed(() => {
+    const base =
+        'The drafts are removed for good, along with their edit history. Rejecting or archiving '
+        + 'them instead keeps them readable and out of your way.';
+
+    if (selectedSentCount.value === 0) {
+        return `${base} This cannot be undone.`;
+    }
+
+    return `${base} ${selectedSentCount.value} of these were already SENT — deleting them means this `
+        + 'application no longer records that the email went out. This cannot be undone.';
+});
+
+function bulkDelete() {
+    const ids = selection.selectedIds.value;
+    processing.value = true;
+
+    router.post(
+        routes.emailDrafts.bulkDestroy(),
+        { ids },
+        {
+            preserveScroll: true,
+            onSuccess: () => selection.forget(ids),
+            onFinish: () => {
+                processing.value = false;
+                confirmingBulkDelete.value = false;
+            },
+        },
+    );
 }
 </script>
 
@@ -88,7 +141,18 @@ function formatDate(value: string | null): string {
         </EmptyState>
 
         <template v-else>
-            <DataTable :columns="columns" :rows="drafts.data" :row-key="(row) => row.id">
+            <DataTable
+                :columns="columns"
+                :rows="drafts.data"
+                :row-key="(row) => row.id"
+                selectable
+                label="draft"
+                :is-selected="selection.isSelected"
+                :all-selected="selection.allVisibleSelected.value"
+                :some-selected="selection.someVisibleSelected.value"
+                @toggle="selection.toggle"
+                @toggle-all="selection.toggleAllVisible"
+            >
                 <template #row="{ row }">
                     <td class="td">
                         <Link
@@ -137,4 +201,29 @@ function formatDate(value: string | null): string {
             <Pagination :meta="drafts.meta" />
         </template>
     </div>
+
+    <!--
+        Delete only. There is deliberately no bulk edit here: a draft is a
+        subject and a body written for one person, and no field on it means the
+        same thing across forty of them.
+    -->
+    <BulkActionBar
+        :count="selection.count.value"
+        :off-page-count="selection.offPageCount.value"
+        label="draft"
+        :processing="processing"
+        :can-edit="false"
+        @delete="confirmingBulkDelete = true"
+        @clear="selection.clear"
+    />
+
+    <ConfirmDialog
+        :open="confirmingBulkDelete"
+        :title="`Delete ${selection.count.value} draft(s)?`"
+        :message="deleteMessage"
+        :confirm-label="`Delete ${selection.count.value}`"
+        :processing="processing"
+        @cancel="confirmingBulkDelete = false"
+        @confirm="bulkDelete"
+    />
 </template>

@@ -116,6 +116,7 @@ export const routes = {
         reject: (id: number) => `/email-drafts/${id}/reject`,
         archive: (id: number) => `/email-drafts/${id}/archive`,
         send: (id: number) => `/email-drafts/${id}/send`,
+        bulkDestroy: () => '/email-drafts/bulk/delete',
     },
 
     // Replies received in Outlook from CRM contacts. Sync is a POST you press,

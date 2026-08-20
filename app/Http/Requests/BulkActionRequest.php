@@ -6,36 +6,21 @@ namespace App\Http\Requests;
 
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Base for the bulk update/delete endpoints.
+ * Base for the bulk update endpoints.
  *
- * The rules come from the model's own bulkEditableFields(), so a field cannot
- * be written by a bulk request unless the model declares it. That is the whole
- * point: the payload is a map of arbitrary column names, and without a
- * whitelist derived from a single source of truth this endpoint would be a
- * mass-assignment hole.
- *
- * `ids` is capped. Not for safety - for honesty: a request large enough to time
- * out mid-way is worse than one that is refused up front.
+ * Adds editing to the selection BulkDeleteRequest already validates. The rules
+ * come from the model's own bulkEditableFields(), so a field cannot be written
+ * by a bulk request unless the model declares it. That is the whole point: the
+ * payload is a map of arbitrary column names, and without a whitelist derived
+ * from a single source of truth this endpoint would be a mass-assignment hole.
  */
-abstract class BulkActionRequest extends FormRequest
+abstract class BulkActionRequest extends BulkDeleteRequest
 {
-    /** Beyond this, use a filter and a smaller selection. */
-    public const MAX_IDS = 500;
-
     /** @return class-string<Model> */
     abstract protected function model(): string;
-
-    /** The table `ids` must exist in. */
-    abstract protected function table(): string;
-
-    public function authorize(): bool
-    {
-        return true;
-    }
 
     /** @return array<string, mixed> */
     public function rules(): array
@@ -43,8 +28,7 @@ abstract class BulkActionRequest extends FormRequest
         $model = $this->model();
 
         return [
-            'ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_IDS],
-            'ids.*' => ['integer', Rule::exists($this->table(), 'id')],
+            ...parent::rules(),
 
             'values' => ['sometimes', 'array'],
             ...$model::bulkValidationRules(),
@@ -62,24 +46,9 @@ abstract class BulkActionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'ids.required' => 'Select at least one record first.',
-            'ids.max' => 'Select at most '.self::MAX_IDS.' records at a time.',
-            'ids.*.exists' => 'One of the selected records no longer exists. Refresh and try again.',
+            ...parent::messages(),
             'clear.*.in' => 'That field cannot be emptied.',
         ];
-    }
-
-    /**
-     * The selected ids, de-duplicated.
-     *
-     * @return list<int>
-     */
-    public function ids(): array
-    {
-        return array_values(array_unique(array_map(
-            intval(...),
-            $this->validated('ids', []),
-        )));
     }
 
     /**

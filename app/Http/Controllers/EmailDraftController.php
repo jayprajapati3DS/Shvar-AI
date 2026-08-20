@@ -7,11 +7,13 @@ namespace App\Http\Controllers;
 use App\Enums\EmailDraftStatus;
 use App\Enums\EmailVariant;
 use App\Http\Controllers\Concerns\RedirectsToOrigin;
+use App\Http\Requests\BulkEmailDraftDeleteRequest;
 use App\Http\Requests\UpdateEmailDraftRequest;
 use App\Http\Resources\EmailDraftResource;
 use App\Models\Company;
 use App\Models\EmailDraft;
 use App\Models\Product;
+use App\Services\BulkEditor;
 use App\Services\Email\EmailDraftEditor;
 use App\Services\Email\EmailQualityChecker;
 use App\Services\Email\EmailRenderer;
@@ -223,6 +225,45 @@ class EmailDraftController extends Controller
     {
         $draft->delete();
 
-        return to_route('email-drafts.index')->with('success', 'Draft deleted.');
+        return $this->backFromDelete(
+            route('email-drafts.show', $draft),
+            'email-drafts.index',
+        )->with('success', 'Draft deleted.');
+    }
+
+    /**
+     * Delete a selection from the list.
+     *
+     * Clearing out a run of drafts you are never going to send is the whole
+     * reason this exists: regenerating an email three times leaves nine of them,
+     * and removing those one at a time is tedious enough that they get left
+     * there instead.
+     *
+     * Sent drafts are NOT excluded - refusing to delete your own records would
+     * be presumptuous - but they are counted separately in the message, because
+     * a sent draft is the only trace this application keeps of an email that
+     * genuinely left the machine, and losing a run of those to a stray "select
+     * all" should not pass without comment.
+     */
+    public function bulkDestroy(BulkEmailDraftDeleteRequest $request, BulkEditor $editor): RedirectResponse
+    {
+        $ids = $request->ids();
+
+        // Counted before the delete, obviously - afterwards there is nothing
+        // left to count.
+        $sent = EmailDraft::query()
+            ->whereIn('id', $ids)
+            ->where('status', EmailDraftStatus::Sent->value)
+            ->count();
+
+        $deleted = $editor->delete(EmailDraft::class, $ids);
+
+        return $this->backTo('email-drafts.index')->with(
+            'success',
+            $sent > 0
+                ? "Deleted {$deleted} draft(s), including {$sent} that had already been sent - "
+                    .'that send is no longer recorded anywhere.'
+                : "Deleted {$deleted} draft(s).",
+        );
     }
 }

@@ -124,6 +124,16 @@ Route::get('email-drafts/{draft}', [EmailDraftController::class, 'show'])->name(
 Route::put('email-drafts/{draft}', [EmailDraftController::class, 'update'])->name('email-drafts.update');
 Route::delete('email-drafts/{draft}', [EmailDraftController::class, 'destroy'])->name('email-drafts.destroy');
 
+// Bulk delete only - there is deliberately no bulk EDIT here. A draft is a
+// subject and a body written for one person; no field on it means the same
+// thing across forty of them, and offering one would be offering a way to
+// overwrite forty emails with the same sentence.
+//
+// Under its own path segment so it can never be mistaken for a draft id, and a
+// POST because the selection is a list that does not belong in a query string.
+Route::post('email-drafts/bulk/delete', [EmailDraftController::class, 'bulkDestroy'])
+    ->name('email-drafts.bulk-destroy');
+
 // The approval gate. `approve` is the only route that can make a draft
 // sendable, and `send` refuses anything that has not been through it.
 Route::post('email-drafts/{draft}/approve', [EmailDraftController::class, 'approve'])
